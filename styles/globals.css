@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  ─────────────────────────────────────────
+  shadcn/ui semantic tokens (HSL channels)
+  ─────────────────────────────────────────
+  Mapped to ZamAdmit brand:
+  - primary  → brand-600 (deep green)
+  - radius   → 10px (within 8–12px brief)
+*/
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 142 36% 9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 142 36% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 142 36% 9%;
+
+    /* brand-600 → HSL */
+    --primary: 142 59% 26%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 140 14% 96%;
+    --secondary-foreground: 142 36% 14%;
+
+    --muted: 140 14% 96%;
+    --muted-foreground: 142 8% 38%;
+
+    --accent: 142 47% 94%;
+    --accent-foreground: 142 59% 22%;
+
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 140 12% 92%;
+    --input:  140 12% 92%;
+    --ring:   142 59% 26%;
+
+    --radius: 0.625rem; /* 10px */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-surface text-ink antialiased font-sans;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+  }
+
+  /* Headings always use the display serif */
+  h1, h2, h3 {
+    @apply font-display tracking-tight text-ink;
+  }
+
+  /* Selection */
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+    color: hsl(var(--primary));
+  }
+
+  /* Focus ring (keyboard only) */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.35);
+    border-radius: 6px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar         { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track   { background: transparent; }
+  ::-webkit-scrollbar-thumb   { background: hsl(var(--border)); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+}
+
+/*
+  ─────────────────────────────────────────
+  Utility classes used across the product
+  ─────────────────────────────────────────
+*/
+@layer components {
+  /* Subtle surface for inset content */
+  .surface-subtle {
+    @apply bg-surface-subtle border border-border rounded-lg;
+  }
+
+  /* Eyebrow label above a section title */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.08em] text-brand-600;
+  }
+}
