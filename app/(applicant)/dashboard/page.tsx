@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import {
   ClipboardList, GraduationCap, Sparkles, FileText,
@@ -8,30 +10,57 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { StatCard } from '@/components/shared/stat-card';
-import { ApplicationRow } from '@/components/shared/application-row';
 import { OfferCard } from '@/components/shared/offer-card';
 import { ROUTES } from '@/lib/routes';
-import { applications, currentUser } from '@/lib/mock-data';
-import type { Metadata } from 'next';
+import { useAuth } from '@/hooks/use-auth';
+import * as React from 'react';
+import { api } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+import { Loader2 } from 'lucide-react';
 
-export const metadata: Metadata = {
-  title: 'Dashboard',
-};
+    export default function DashboardPage() {
+      const { user, loading } = useAuth();
 
-export default function DashboardPage() {
-  const submittedCount = applications.filter(a => a.status !== 'draft').length;
-  const acceptedCount  = applications.filter(a => a.status === 'accepted').length;
-  const recent         = [...applications]
-    .filter(a => a.status !== 'draft')
-    .slice(0, 3);
+    const [applications, setApplications] = React.useState<any[]>([]);
+    const [appsLoading, setAppsLoading] = React.useState(true);
+
+    React.useEffect(() => {
+      async function loadApps() {
+        try {
+          const token = getToken();
+          const data = await api.get<any[]>('/applications', token ?? undefined);
+          setApplications(data);
+        } catch {
+          setApplications([]);
+        } finally {
+          setAppsLoading(false);
+        }
+      }
+      loadApps();
+    }, []);
+
+    const submittedCount = applications.filter(a => a.status !== 'draft').length;
+    const acceptedCount  = applications.filter(a => a.status === 'accepted').length;
+    const recent         = [...applications]
+      .filter(a => a.status !== 'draft')
+      .slice(0, 3);
 
   const greeting = getGreeting();
+  const firstName = user?.first_name || '...';
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <p className="text-ink-50 text-sm">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <>
       <PageHeader
-        title={`${greeting}, ${currentUser.firstName}`}
-        description="2025/2026 application cycle — Deadline: 31 August 2025"
+        title={`${greeting}, ${firstName}`}
+        description="2026/2027 application cycle — Deadline: 31 August 2026"
       />
 
       {/* KPI grid */}
@@ -67,7 +96,7 @@ export default function DashboardPage() {
 
       {/* Two-column layout */}
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        {/* Left column — recent applications + recommendations preview */}
+        {/* Left column */}
         <div className="space-y-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -79,12 +108,23 @@ export default function DashboardPage() {
                 </Link>
               </Button>
             </CardHeader>
-            <div className="border-t border-border">
-              {recent.map(app => <ApplicationRow key={app.id} application={app} />)}
-            </div>
+                <div className="border-t border-border">
+                  {appsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="size-5 text-ink-30 animate-spin" />
+                    </div>
+                  ) : recent.length === 0 ? (
+                    <p className="px-5 py-8 text-center text-sm text-ink-50">
+                      No applications yet. Browse programmes to get started.
+                    </p>
+                  ) : (
+                    recent.map(app => (
+                      <DashboardApplicationRow key={app.id} application={app} />
+                    ))
+                  )}
+                </div>
           </Card>
 
-          {/* Discovery prompt */}
           <Card>
             <CardContent className="p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center gap-5">
               <div className="grid place-items-center size-12 rounded-lg bg-brand-50 text-brand-600 shrink-0">
@@ -93,7 +133,7 @@ export default function DashboardPage() {
               <div className="flex-1">
                 <h3 className="font-display text-lg text-ink">Discover more programmes</h3>
                 <p className="mt-1 text-sm text-ink-50 leading-relaxed">
-                  We&apos;ve found 8 programmes that match your grades and interests. Browse what fits you.
+                  We&apos;ve found 8 programmes that match your grades and interests.
                 </p>
               </div>
               <Button variant="primary" asChild className="shrink-0">
@@ -106,7 +146,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Right column — offer + profile completion + quick actions */}
+        {/* Right column */}
         <div className="space-y-5">
           <OfferCard
             programmeName="BSc Computer Science"
@@ -120,17 +160,29 @@ export default function DashboardPage() {
                 Profile completion
               </p>
               <div className="flex items-center gap-3 mb-2">
-                <Progress value={currentUser.completionPct} className="flex-1" />
+                <Progress
+                  value={user?.profile_complete ? 100 : 40}
+                  className="flex-1"
+                />
                 <span className="text-sm font-semibold text-brand-700 tabular-nums">
-                  {currentUser.completionPct}%
+                  {user?.profile_complete ? '100' : '40'}%
                 </span>
               </div>
               <p className="text-xs text-ink-50 leading-relaxed mb-4">
-                Add your Grade 12 results to unlock all recommendations.
+                {user?.profile_complete
+                  ? 'Your profile is complete. You can apply to any programme.'
+                  : 'Complete your profile to unlock applications and recommendations.'}
               </p>
-              <Button variant="secondary" size="sm" asChild className="w-full bg-brand-50 text-brand-700 hover:bg-brand-100">
-                <Link href={ROUTES.profile}>Complete profile</Link>
-              </Button>
+              {!user?.profile_complete && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  asChild
+                  className="w-full bg-brand-50 text-brand-700 hover:bg-brand-100"
+                >
+                  <Link href={ROUTES.profileComplete}>Complete profile</Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -141,9 +193,9 @@ export default function DashboardPage() {
                 Quick actions
               </p>
               <div className="space-y-2">
-                <QuickAction icon={<Compass className="size-4" />} href={ROUTES.discover} label="Browse programmes" />
-                <QuickAction icon={<FilePlus2 className="size-4" />} href={ROUTES.documents} label="Upload a document" />
-                <QuickAction icon={<Sparkles className="size-4" />} href={ROUTES.recommendations} label="View recommendations" />
+                <QuickAction icon={<Compass className="size-4" />}    href={ROUTES.programmes}      label="Browse programmes" />
+                <QuickAction icon={<FilePlus2 className="size-4" />}  href={ROUTES.documents}       label="Upload a document" />
+                <QuickAction icon={<Sparkles className="size-4" />}   href={ROUTES.recommendations} label="View recommendations" />
               </div>
             </CardContent>
           </Card>
@@ -153,9 +205,9 @@ export default function DashboardPage() {
   );
 }
 
-/* ──────────────── helpers ──────────────── */
-
-function QuickAction({ icon, label, href }: { icon: React.ReactNode; label: string; href: string }) {
+function QuickAction({ icon, label, href }: {
+  icon: React.ReactNode; label: string; href: string;
+}) {
   return (
     <Link
       href={href}
@@ -172,4 +224,27 @@ function getGreeting(): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
+}
+
+function DashboardApplicationRow({ application }: { application: any }) {
+  const programmeName = application.programme?.name ?? 'Unknown';
+  const institutionName = application.programme?.institution?.name ?? 'Unknown';
+
+  return (
+    <Link
+      href={ROUTES.application(String(application.id))}
+      className="flex items-center gap-4 px-5 py-3.5 border-b border-border last:border-b-0 hover:bg-ink-5/60 transition-colors group"
+    >
+      <div className="grid place-items-center size-10 rounded-md bg-brand-600 text-white font-display text-base shrink-0">
+        {institutionName.charAt(0)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-ink truncate">{programmeName}</p>
+        <p className="text-xs text-ink-50 truncate">{institutionName}</p>
+      </div>
+      <span className="text-xs font-medium text-ink-50 capitalize">
+        {application.status?.replace('_', ' ')}
+      </span>
+    </Link>
+  );
 }

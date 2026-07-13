@@ -9,21 +9,11 @@ export const metadata: Metadata = {
   description: 'Create your free ZamAdmit profile and start applying to institutions across Zambia.',
 };
 
-const BRAND_POINTS = [
-  'Free to create an account',
-  'Upload documents once, use everywhere',
-  'Get personalised programme recommendations',
-  'Track all applications in real time',
-] as const;
-
 export default function RegisterPage() {
   return (
     <AuthShell
       title="Create your account"
       subtitle="Free to join. Takes about five minutes."
-      brandTitle="Start your higher education journey."
-      brandDescription="Create your applicant profile and apply to any institution in Zambia — all from one place."
-      brandPoints={BRAND_POINTS}
       footer={
         <>
           Already have an account?{' '}

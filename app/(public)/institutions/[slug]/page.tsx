@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  MapPin, Calendar, Building2, GraduationCap, ChevronRight,
+  MapPin, Calendar, Building2, GraduationCap, ChevronRight, BookOpen,
 } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/format';
 import {
   getInstitutionBySlug, getProgrammesByInstitution, getAllInstitutions,
 } from '@/lib/data';
+import type { Programme } from '@/types/domain';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -21,7 +22,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const institution = getInstitutionBySlug(slug);
+  const institution = await getInstitutionBySlug(slug);
   if (!institution) return { title: 'Institution not found' };
   return {
     title: institution.name,
@@ -29,16 +30,39 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export function generateStaticParams() {
-  return getAllInstitutions().map(i => ({ slug: i.slug }));
+export async function generateStaticParams() {
+  const institutions = await getAllInstitutions();
+  return institutions.map(i => ({ slug: i.slug }));
+}
+
+/**
+ * Group an array of programmes by their `faculty` field (mapped from the
+ * backend's `school` column). Returns an array of [school, programmes[]]
+ * tuples sorted alphabetically for stable rendering.
+ */
+function groupProgrammesBySchool(programmes: Programme[]): [string, Programme[]][] {
+  const map = new Map<string, Programme[]>();
+
+  for (const p of programmes) {
+    const school = p.faculty?.trim() || 'Other programmes';
+    if (!map.has(school)) map.set(school, []);
+    map.get(school)!.push(p);
+  }
+
+  return Array.from(map.entries())
+    .map(([school, progs]) =>
+      [school, [...progs].sort((a, b) => a.name.localeCompare(b.name))] as [string, Programme[]],
+    )
+    .sort((a, b) => a[0].localeCompare(b[0]));
 }
 
 export default async function InstitutionPage({ params }: PageProps) {
   const { slug } = await params;
-  const institution = getInstitutionBySlug(slug);
+  const institution = await getInstitutionBySlug(slug);
   if (!institution) notFound();
 
-  const programmes = getProgrammesByInstitution(institution.id);
+  const programmes = await getProgrammesByInstitution(institution.id);
+  const grouped    = groupProgrammesBySchool(programmes);
 
   return (
     <article className="bg-surface">
@@ -92,9 +116,9 @@ export default async function InstitutionPage({ params }: PageProps) {
       {/* Quick facts */}
       <section className="border-b border-border bg-white">
         <div className="container py-5 grid grid-cols-2 sm:grid-cols-4 gap-y-4 gap-x-6">
-          <Fact icon={<Building2 className="size-4" />} label="Type" value={institution.type === 'public' ? 'Public' : 'Private'} />
-          <Fact icon={<Calendar className="size-4" />} label="Established" value={String(institution.established)} />
-          <Fact icon={<GraduationCap className="size-4" />} label="Programmes" value={String(institution.programmeCount)} />
+          <Fact icon={<Building2 className="size-4" />}    label="Type"        value={institution.type === 'public' ? 'Public' : 'Private'} />
+          <Fact icon={<Calendar className="size-4" />}     label="Established" value={String(institution.established)} />
+          <Fact icon={<GraduationCap className="size-4" />} label="Programmes"  value={String(programmes.length)} />
           <Fact
             icon={<Calendar className="size-4" />}
             label="Closes"
@@ -128,7 +152,7 @@ export default async function InstitutionPage({ params }: PageProps) {
                   <p className="mt-1 text-sm text-ink-50">
                     {programmes.length === 0
                       ? 'No programmes listed yet.'
-                      : `${programmes.length} programme${programmes.length === 1 ? '' : 's'} available`}
+                      : `${programmes.length} programme${programmes.length === 1 ? '' : 's'} across ${grouped.length} ${grouped.length === 1 ? 'school' : 'schools'}`}
                   </p>
                 </div>
               </div>
@@ -138,9 +162,14 @@ export default async function InstitutionPage({ params }: PageProps) {
                   Programme listings for this institution are coming soon.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {programmes.map(p => (
-                    <ProgrammeCard key={p.id} programme={p} variant="list" />
+                <div className="space-y-10">
+                  {grouped.map(([school, schoolProgrammes]) => (
+                    <SchoolSection
+                      key={school}
+                      schoolName={school}
+                      programmes={schoolProgrammes}
+                      isOpen={institution.isAcceptingApplications}
+                    />
                   ))}
                 </div>
               )}
@@ -172,11 +201,40 @@ export default async function InstitutionPage({ params }: PageProps) {
                   Not accepting applications
                 </p>
                 <p className="text-sm text-ink-70 leading-relaxed">
-                  This institution is not currently accepting applications. Check back soon or browse other institutions.
+                  This institution is not currently accepting applications.
                 </p>
                 <Button asChild variant="outline" className="w-full mt-4">
                   <Link href={ROUTES.institutions}>See open institutions</Link>
                 </Button>
+              </div>
+            )}
+
+            {grouped.length > 0 && (
+              <div className="rounded-xl border border-border bg-white p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-50 mb-3">
+                  Schools
+                </p>
+                <ul className="space-y-1.5">
+                  {grouped.map(([school, schoolProgrammes]) => {
+                    const anchor = '#' + schoolSlug(school);
+                    return (
+                      <li key={school}>
+                        <Link
+                          href={anchor}
+                          className="flex items-center justify-between text-sm text-ink-70 hover:text-brand-700 transition-colors"
+                        >
+                          <span className="truncate flex items-center gap-2">
+                            <BookOpen className="size-3.5 text-ink-30 shrink-0" />
+                            {school}
+                          </span>
+                          <span className="text-xs text-ink-30 shrink-0 ml-2">
+                            {schoolProgrammes.length}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             )}
 
@@ -185,7 +243,7 @@ export default async function InstitutionPage({ params }: PageProps) {
                 Need help?
               </p>
               <p className="text-sm text-ink-70 leading-relaxed mb-3">
-                If you have questions about a programme or about this institution, our team can help.
+                Questions about a programme? Our team can help.
               </p>
               <Link href="#" className="text-sm font-semibold text-brand-700 hover:underline">
                 Contact ZamAdmit support →
@@ -198,6 +256,47 @@ export default async function InstitutionPage({ params }: PageProps) {
   );
 }
 
+/* School section — group header + its programmes */
+
+function SchoolSection({
+  schoolName, programmes, isOpen,
+}: {
+  schoolName: string;
+  programmes: Programme[];
+  isOpen: boolean;
+}) {
+  return (
+    <section id={schoolSlug(schoolName)} className="scroll-mt-20">
+      <div className="flex items-end justify-between gap-3 mb-4 pb-3 border-b border-border">
+        <div className="flex items-center gap-2.5">
+          <div className="grid place-items-center size-8 rounded-md bg-brand-50 text-brand-700 shrink-0">
+            <BookOpen className="size-4" />
+          </div>
+          <h3 className="font-display text-xl text-ink leading-tight">
+            {schoolName}
+          </h3>
+        </div>
+        <p className="text-xs text-ink-50 shrink-0">
+          {programmes.length} {programmes.length === 1 ? 'programme' : 'programmes'}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {programmes.map(p => (
+          <ProgrammeCard
+            key={p.id}
+            programme={p}
+            variant="list"
+            isOpen={isOpen}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* Helpers */
+
 function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div>
@@ -208,4 +307,11 @@ function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; va
       <p className="mt-1 text-base font-semibold text-ink">{value}</p>
     </div>
   );
+}
+
+/**
+ * Make a URL-safe id from a school name for anchor links.
+ */
+function schoolSlug(name: string): string {
+  return 'school-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }

@@ -3,27 +3,21 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check, Save, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowLeft, Check, Save, Loader2 } from 'lucide-react';
 import { useDraftApplication } from '@/hooks/use-draft-application';
 import { ROUTES } from '@/lib/routes';
+import { api } from '@/lib/api';
+import { getToken, getAuthUser } from '@/lib/auth';
 import type { Programme, Institution } from '@/types/domain';
 import { cn } from '@/lib/utils';
 
-// Step components (defined in separate files)
-import { StepConfirm }     from './steps/step-confirm';
-import { StepPersonal }    from './steps/step-personal';
-import { StepGrades }      from './steps/step-grades';
-import { StepStatement }   from './steps/step-statement';
-import { StepDocuments }   from './steps/step-documents';
-import { StepReview }      from './steps/step-review';
+import { StepConfirm }   from './steps/step-confirm';
+import { StepStatement } from './steps/step-statement';
+import { StepReview }    from './steps/step-review';
 
 const STEPS = [
   { id: 'confirm',   label: 'Confirm' },
-  { id: 'personal',  label: 'Personal' },
-  { id: 'grades',    label: 'Grades' },
   { id: 'statement', label: 'Statement' },
-  { id: 'documents', label: 'Documents' },
   { id: 'review',    label: 'Review' },
 ] as const;
 
@@ -36,11 +30,30 @@ export function ApplyWizard({ programme, institution }: ApplyWizardProps) {
   const router = useRouter();
   const [stepIndex, setStepIndex] = React.useState(0);
   const [submitting, setSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
+  const [authChecked, setAuthChecked] = React.useState(false);
 
   const { draft, update, clear, hydrated } = useDraftApplication(programme.slug);
 
-  // Wait for draft hydration before rendering any form (avoids flash of empty state)
-  if (!hydrated) {
+  /* Auth + profile completeness guard.
+     Runs once before any wizard UI renders. */
+  React.useEffect(() => {
+    const user = getAuthUser();
+
+    if (!user) {
+      router.replace(ROUTES.login);
+      return;
+    }
+
+    if (!user.profile_complete) {
+      router.replace(ROUTES.profileComplete);
+      return;
+    }
+
+    setAuthChecked(true);
+  }, [router]);
+
+  if (!authChecked || !hydrated) {
     return (
       <div className="min-h-[60vh] grid place-items-center">
         <Loader2 className="size-6 text-brand-600 animate-spin" />
@@ -60,20 +73,29 @@ export function ApplyWizard({ programme, institution }: ApplyWizardProps) {
 
   async function handleSubmit() {
     setSubmitting(true);
-    // Simulate the API call — replace with real fetch later
-    await new Promise(r => setTimeout(r, 1200));
-    // Discard the draft now that we've "submitted"
-    clear();
-    setSubmitting(false);
-    // Redirect to a "submitted" confirmation; using app-1 as a stand-in id
-    router.push(ROUTES.application('app-1'));
+    setSubmitError(null);
+
+    try {
+      const token = getToken();
+      const response = await api.post<any>('/applications', {
+        programme_id:       Number(programme.id),
+        personal_statement: draft?.statement ?? '',
+      }, token ?? undefined);
+
+      clear();
+      router.push(ROUTES.application(String(response.id)));
+
+    } catch (err: any) {
+      setSubmitError(err.message || 'Could not submit your application. Please try again.');
+      setSubmitting(false);
+    }
   }
 
   const currentStep = STEPS[stepIndex];
 
   return (
     <div className="bg-surface min-h-screen pt-20 lg:pt-24">
-      {/* ── Sticky progress header ── */}
+      {/* Sticky progress header */}
       <header className="sticky top-16 lg:top-18 z-20 bg-white/95 backdrop-blur-md border-b border-border">
         <div className="container py-4">
           <div className="flex items-center justify-between gap-4 mb-4">
@@ -96,46 +118,24 @@ export function ApplyWizard({ programme, institution }: ApplyWizardProps) {
         </div>
       </header>
 
-      {/* ── Step body ── */}
+      {/* Step body */}
       <main className="container py-10 lg:py-12">
         <div className="max-w-2xl mx-auto">
           {currentStep.id === 'confirm' && (
             <StepConfirm
               programme={programme}
               institution={institution}
-              onContinue={() => { update({ programmeId: programme.id }); goNext(); }}
-            />
-          )}
-
-          {currentStep.id === 'personal' && (
-            <StepPersonal
-              draft={draft?.personal}
-              onSubmit={(values) => { update({ personal: values }); goNext(); }}
-              onBack={goPrev}
-            />
-          )}
-
-          {currentStep.id === 'grades' && (
-            <StepGrades
-              programme={programme}
-              draft={draft?.grades}
-              onSubmit={(values) => { update({ grades: values }); goNext(); }}
-              onBack={goPrev}
+              onContinue={() => {
+                update({ programmeId: programme.id });
+                goNext();
+              }}
             />
           )}
 
           {currentStep.id === 'statement' && (
             <StepStatement
               draft={draft?.statement}
-              onSubmit={(value) => { update({ statement: value }); goNext(); }}
-              onBack={goPrev}
-            />
-          )}
-
-          {currentStep.id === 'documents' && (
-            <StepDocuments
-              draft={draft?.documentIds}
-              onSubmit={(values) => { update({ documentIds: values }); goNext(); }}
+              onSubmit={value => { update({ statement: value }); goNext(); }}
               onBack={goPrev}
             />
           )}
@@ -146,25 +146,23 @@ export function ApplyWizard({ programme, institution }: ApplyWizardProps) {
               institution={institution}
               draft={draft}
               submitting={submitting}
+              submitError={submitError}
               onBack={goPrev}
               onSubmit={handleSubmit}
             />
           )}
         </div>
 
-        {/* Save-draft note */}
         <div className="max-w-2xl mx-auto mt-10 pt-6 border-t border-border flex items-center justify-center gap-2 text-xs text-ink-50">
           <Save className="size-3.5" />
-          Your progress is saved automatically. You can close this page and return any time.
+          Your progress is saved automatically.
         </div>
       </main>
     </div>
   );
 }
 
-/* ─────────────────────────────────
-   ProgressBar — 6-step indicator
-───────────────────────────────── */
+/* Progress bar */
 
 interface ProgressBarProps {
   steps: typeof STEPS;
@@ -175,37 +173,31 @@ function ProgressBar({ steps, currentIndex }: ProgressBarProps) {
   return (
     <ol className="flex items-center gap-1">
       {steps.map((step, i) => {
-        const done = i < currentIndex;
+        const done   = i < currentIndex;
         const active = i === currentIndex;
         return (
           <li key={step.id} className="flex-1 flex items-center gap-1">
             <div className="flex items-center gap-2 min-w-0">
-              <div
-                className={cn(
-                  'grid place-items-center size-7 rounded-full text-xs font-bold shrink-0 transition-colors',
-                  done   && 'bg-brand-100 text-brand-700',
-                  active && 'bg-brand-600 text-white',
-                  !done && !active && 'bg-ink-10 text-ink-50',
-                )}
-              >
+              <div className={cn(
+                'grid place-items-center size-7 rounded-full text-xs font-bold shrink-0 transition-colors',
+                done   && 'bg-brand-100 text-brand-700',
+                active && 'bg-brand-600 text-white',
+                !done && !active && 'bg-ink-10 text-ink-50',
+              )}>
                 {done ? <Check className="size-3.5" strokeWidth={3} /> : i + 1}
               </div>
-              <span
-                className={cn(
-                  'text-xs font-semibold hidden md:inline truncate',
-                  active ? 'text-ink' : 'text-ink-50',
-                )}
-              >
+              <span className={cn(
+                'text-xs font-semibold hidden md:inline truncate',
+                active ? 'text-ink' : 'text-ink-50',
+              )}>
                 {step.label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div
-                className={cn(
-                  'flex-1 h-px transition-colors',
-                  done ? 'bg-brand-300' : 'bg-ink-10',
-                )}
-              />
+              <div className={cn(
+                'flex-1 h-px transition-colors',
+                done ? 'bg-brand-300' : 'bg-ink-10',
+              )} />
             )}
           </li>
         );
@@ -214,9 +206,7 @@ function ProgressBar({ steps, currentIndex }: ProgressBarProps) {
   );
 }
 
-/* ─────────────────────────────────
-   Reusable footer used by every step
-───────────────────────────────── */
+/* Reusable footer used by step components */
 
 interface StepFooterProps {
   onBack?: () => void;
@@ -234,22 +224,27 @@ export function StepFooter({
   return (
     <div className="flex items-center justify-between gap-3 mt-8 pt-6 border-t border-border">
       {onBack ? (
-        <Button type="button" variant="outline" onClick={onBack} disabled={loading}>
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-ink hover:bg-ink-5 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <ArrowLeft className="size-4" />
           Back
-        </Button>
+        </button>
       ) : (
         <span />
       )}
-      <Button
+      <button
         type={primaryType}
         onClick={onPrimary}
         disabled={primaryDisabled || loading}
+        className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading && <Loader2 className="size-4 animate-spin" />}
         {primaryLabel}
-        {!loading && <ArrowRight className="size-4" />}
-      </Button>
+      </button>
     </div>
   );
 }

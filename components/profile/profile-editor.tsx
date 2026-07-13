@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, Check, Loader2 } from 'lucide-react';
 import {
@@ -13,20 +13,13 @@ import {
   profileSchema, PROVINCES, type ProfileValues,
 } from '@/lib/schemas/profile';
 import type { UserProfile, GradeRequirement } from '@/types/domain';
-import { cn } from '@/lib/utils';
-
-const INTEREST_OPTIONS = [
-  'Technology','Business','Medicine','Law','Education',
-  'Agriculture','Engineering','Arts & Humanities','Health Sciences',
-  'Social Sciences',
-] as const;
 
 interface Props {
   profile: UserProfile;
 }
 
 export function ProfileEditor({ profile }: Props) {
-  /* ── Personal info form ── */
+  /* Personal info form */
   const form = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -40,7 +33,7 @@ export function ProfileEditor({ profile }: Props) {
     },
   });
 
-  /* ── Grades (managed locally — separate concern from main form) ── */
+  /* Grades (managed locally — separate concern from main form) */
   const [grades, setGrades] = React.useState<GradeRequirement[]>(profile.grades);
 
   function addGrade() {
@@ -53,17 +46,7 @@ export function ProfileEditor({ profile }: Props) {
     setGrades(g => g.map((row, i) => i === index ? { ...row, ...patch } : row));
   }
 
-  /* ── Interests ── */
-  const [interests, setInterests] = React.useState<string[]>(profile.interests);
-
-  function toggleInterest(name: string) {
-    setInterests(prev => prev.includes(name)
-      ? prev.filter(i => i !== name)
-      : [...prev, name],
-    );
-  }
-
-  /* ── Save state (mock) ── */
+  /* Save state (mock) */
   const [saving, setSaving] = React.useState(false);
   const [saved,  setSaved]  = React.useState(false);
 
@@ -72,8 +55,8 @@ export function ProfileEditor({ profile }: Props) {
     setSaved(false);
     // Simulate API call
     await new Promise(r => setTimeout(r, 800));
-    // In real app: send personal + grades + interests to API
-    console.log('Save profile', { personal, grades, interests });
+    // In real app: send personal + grades to API
+    console.log('Save profile', { personal, grades });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -83,7 +66,7 @@ export function ProfileEditor({ profile }: Props) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-7">
 
-        {/* ── Personal information ── */}
+        {/* Personal information */}
         <Section
           title="Personal information"
           description="Used to pre-fill your applications. Keep it accurate."
@@ -154,7 +137,7 @@ export function ProfileEditor({ profile }: Props) {
           )} />
         </Section>
 
-        {/* ── Grade 12 results ── */}
+        {/* Grade 12 results */}
         <Section
           title="Grade 12 ECZ results"
           description="Used to match you with programmes you qualify for. ECZ scale: 1 = distinction, 9 = failing."
@@ -199,34 +182,7 @@ export function ProfileEditor({ profile }: Props) {
           </Button>
         </Section>
 
-        {/* ── Interests ── */}
-        <Section
-          title="Academic interests"
-          description="Tap to toggle. Used by the recommendation engine to rank programmes."
-        >
-          <div className="flex flex-wrap gap-2">
-            {INTEREST_OPTIONS.map(name => {
-              const active = interests.includes(name);
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => toggleInterest(name)}
-                  className={cn(
-                    'rounded-full px-4 py-2 text-sm font-medium border transition-colors',
-                    active
-                      ? 'bg-brand-600 text-white border-brand-600'
-                      : 'bg-white text-ink-70 border-border hover:border-brand-300 hover:text-ink',
-                  )}
-                >
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-
-        {/* ── Save bar (sticky bottom) ── */}
+        {/* Save bar (sticky bottom) */}
         <div className="sticky bottom-4 mt-8">
           <div className="mx-auto max-w-3xl rounded-xl border border-border bg-white shadow-elevate p-4 flex items-center justify-between gap-4">
             <p className="text-sm text-ink-50">
@@ -253,9 +209,7 @@ export function ProfileEditor({ profile }: Props) {
   );
 }
 
-/* ─────────────────────────────────
-   Section wrapper
-───────────────────────────────── */
+/* Section wrapper */
 
 function Section({
   title, description, children,

@@ -5,7 +5,7 @@ import { ROUTES } from '@/lib/routes';
 
 
 const HERO_SLIDES = [
-  'C:\Users\HP\OneDrive\Desktop\CS4\Project\current\zamadmit-next\public\images\hero\slide-1.jpg',
+  '/images/hero/slide-1.jpg',
   '/images/hero/slide-2.jpg',
   '/images/hero/slide-3.jpg',
   '/images/hero/slide-4.jpg',

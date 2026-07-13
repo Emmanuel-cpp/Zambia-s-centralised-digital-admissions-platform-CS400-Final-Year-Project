@@ -1,5 +1,4 @@
 'use client';
-
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -10,6 +9,9 @@ import {
 import { Logo } from './logo';
 import { ROUTES } from '@/lib/routes';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
+import { getToken, clearAuth } from '@/lib/auth';
 
 interface NavItem {
   label: string;
@@ -196,15 +198,32 @@ function SidebarNav({
 }
 
 function SidebarSignOut() {
+  const router = useRouter();
+
+  async function handleSignOut() {
+    try {
+      const token = getToken();
+      if (token) {
+        await api.post('/logout', {}, token);
+      }
+    } catch {
+      // Ignore errors — clear local auth regardless
+    } finally {
+      clearAuth();
+      router.push(ROUTES.home);
+    }
+  }
+
   return (
     <div className="p-3 border-t border-border">
-      <Link
-        href={ROUTES.home}
-        className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-ink-30 hover:bg-ink-5 hover:text-ink-70 transition-colors"
+      <button
+        type="button"
+        onClick={handleSignOut}
+        className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-ink-30 hover:bg-ink-5 hover:text-ink-70 transition-colors"
       >
         <LogOut className="size-[18px]" />
         Sign out
-      </Link>
+      </button>
     </div>
   );
 }

@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageBackLink } from '@/components/shared/page-back-link';
 import { ROUTES } from '@/lib/routes';
+import { ApplyButton } from '@/components/shared/apply-button';
 import { formatDate } from '@/lib/format';
 import {
   getProgrammeBySlug, getInstitutionById, getAllProgrammes,
 } from '@/lib/data';
+
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -17,7 +19,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const programme = getProgrammeBySlug(slug);
+  const programme = await getProgrammeBySlug(slug);
   if (!programme) return { title: 'Programme not found' };
   return {
     title: programme.name,
@@ -25,16 +27,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export function generateStaticParams() {
-  return getAllProgrammes().map(p => ({ slug: p.slug }));
+export async function generateStaticParams() {
+  const programmes = await getAllProgrammes();
+  return programmes.map(p => ({ slug: p.slug }));
 }
 
 export default async function ProgrammePage({ params }: PageProps) {
   const { slug } = await params;
-  const programme = getProgrammeBySlug(slug);
+  const programme = await getProgrammeBySlug(slug);
   if (!programme) notFound();
 
-  const institution = getInstitutionById(programme.institutionId);
+  // Fetch institution by slug using the institution's slug from the programme
+  // Since our API returns institution data nested in the programme, we use it directly
+const institution = await getInstitutionById(programme.institutionId);
   if (!institution) notFound();
 
   const isOpen = institution.isAcceptingApplications;
@@ -78,12 +83,7 @@ export default async function ProgrammePage({ params }: PageProps) {
             <div className="hidden lg:flex flex-col items-end gap-2 shrink-0">
               {isOpen ? (
                 <>
-                  <Button size="lg" asChild>
-                    <Link href={ROUTES.apply(programme.slug)}>
-                      Apply now
-                      <ArrowRight className="size-4" />
-                    </Link>
-                  </Button>
+                  <ApplyButton programmeSlug={programme.slug} size="lg" />
                   <p className="text-xs text-ink-50">
                     Closes {formatDate(institution.applicationDeadline)}
                   </p>
@@ -91,9 +91,7 @@ export default async function ProgrammePage({ params }: PageProps) {
               ) : (
                 <>
                   <Button size="lg" disabled>Applications closed</Button>
-                  <p className="text-xs text-ink-50">
-                    Check back next intake cycle
-                  </p>
+                  <p className="text-xs text-ink-50">Check back next intake cycle</p>
                 </>
               )}
             </div>
@@ -105,40 +103,29 @@ export default async function ProgrammePage({ params }: PageProps) {
         <div className="grid lg:grid-cols-[1fr_320px] gap-10 lg:gap-14">
           <div className="space-y-12">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 pb-8 border-b border-border">
-              <Fact icon={<Clock className="size-4" />}        label="Duration"   value={`${programme.durationYears} years`} />
-              <Fact icon={<Building2 className="size-4" />}    label="Mode"       value={programme.studyMode} />
-              <Fact icon={<Calendar className="size-4" />}     label="Intake"     value={programme.intake} />
-              <Fact icon={<GraduationCap className="size-4" />} label="Faculty"    value={programme.faculty} />
+              <Fact icon={<Clock className="size-4" />}         label="Duration" value={`${programme.durationYears} years`} />
+              <Fact icon={<Building2 className="size-4" />}     label="Mode"     value={programme.studyMode} />
+              <Fact icon={<Calendar className="size-4" />}      label="Intake"   value={programme.intake} />
+              <Fact icon={<GraduationCap className="size-4" />} label="School"   value={programme.faculty} />
             </div>
 
             <div>
-              <h2 className="font-display text-display-sm text-ink mb-4">
-                About this programme
-              </h2>
-              <p className="text-base text-ink-70 leading-relaxed max-w-2xl">
-                {programme.description}
-              </p>
+              <h2 className="font-display text-display-sm text-ink mb-4">About this programme</h2>
+              <p className="text-base text-ink-70 leading-relaxed max-w-2xl">{programme.description}</p>
             </div>
 
             <div>
-              <h2 className="font-display text-display-sm text-ink mb-2">
-                Entry requirements
-              </h2>
+              <h2 className="font-display text-display-sm text-ink mb-2">Entry requirements</h2>
               <p className="text-sm text-ink-50 mb-5 max-w-2xl">
-                Minimum Grade 12 ECZ grades required for admission. The Zambian ECZ scale runs from
-                1 (distinction) to 9 (failing) — lower numbers are better.
+                Minimum Grade 12 ECZ grades. Scale: 1 = distinction, 9 = failing. Lower is better.
               </p>
 
               <div className="rounded-lg border border-border overflow-hidden max-w-xl">
                 <table className="w-full text-sm">
                   <thead className="bg-surface-subtle border-b border-border">
                     <tr>
-                      <th className="text-left font-semibold text-ink-50 px-4 py-3 text-xs uppercase tracking-[0.06em]">
-                        Subject
-                      </th>
-                      <th className="text-right font-semibold text-ink-50 px-4 py-3 text-xs uppercase tracking-[0.06em]">
-                        Min grade
-                      </th>
+                      <th className="text-left font-semibold text-ink-50 px-4 py-3 text-xs uppercase tracking-[0.06em]">Subject</th>
+                      <th className="text-right font-semibold text-ink-50 px-4 py-3 text-xs uppercase tracking-[0.06em]">Min grade</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -162,37 +149,23 @@ export default async function ProgrammePage({ params }: PageProps) {
             <div className="rounded-xl border border-border bg-white p-5 shadow-card lg:hidden">
               {isOpen ? (
                 <>
-                  <Button size="lg" className="w-full" asChild>
-                    <Link href={ROUTES.apply(programme.slug)}>
-                      Apply now
-                      <ArrowRight className="size-4" />
-                    </Link>
-                  </Button>
+                  <ApplyButton programmeSlug={programme.slug} size="lg" />
                   <p className="text-xs text-ink-50 text-center mt-2">
                     Closes {formatDate(institution.applicationDeadline)}
                   </p>
                 </>
               ) : (
-                <Button size="lg" className="w-full" disabled>
-                  Applications closed
-                </Button>
+                <Button size="lg" className="w-full" disabled>Applications closed</Button>
               )}
             </div>
 
             <div className="rounded-xl border border-border bg-white p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-50 mb-3">
-                Offered by
-              </p>
-              <Link
-                href={ROUTES.institution(institution.slug)}
-                className="block group"
-              >
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-50 mb-3">Offered by</p>
+              <Link href={ROUTES.institution(institution.slug)} className="block group">
                 <h3 className="font-display text-lg text-ink group-hover:text-brand-700 transition-colors leading-tight">
                   {institution.name}
                 </h3>
-                <p className="text-sm text-ink-50 mt-1">
-                  {institution.city}, {institution.province} Province
-                </p>
+                <p className="text-sm text-ink-50 mt-1">{institution.city}, {institution.province} Province</p>
                 <span className="inline-flex items-center gap-1 mt-3 text-xs font-semibold text-brand-700">
                   View institution
                   <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
@@ -202,9 +175,7 @@ export default async function ProgrammePage({ params }: PageProps) {
 
             {isOpen && (
               <div className="rounded-xl border border-success/20 bg-success-soft p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.08em] text-success mb-1.5">
-                  Application timeline
-                </p>
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-success mb-1.5">Application timeline</p>
                 <p className="text-sm text-ink-70 leading-relaxed">
                   Applications close on <strong className="text-ink">{formatDate(institution.applicationDeadline)}</strong>.
                   Most students complete their application in 15–20 minutes.

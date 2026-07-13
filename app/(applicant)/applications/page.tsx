@@ -1,80 +1,159 @@
+'use client';
+
+import * as React from 'react';
 import Link from 'next/link';
 import {
-  ClipboardList, ArrowRight, Plus, Search,
+  ClipboardList, ArrowRight, Plus, Search, Loader2,
 } from 'lucide-react';
-import type { Metadata } from 'next';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ROUTES } from '@/lib/routes';
 import { formatDate } from '@/lib/format';
-import { getMyApplications } from '@/lib/data';
-import type { Application } from '@/types/domain';
+import { api } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
-export const metadata: Metadata = {
-  title: 'My applications',
-};
+/**
+ * Shape Laravel returns from /api/applications:
+ * {
+ *   id, user_id, programme_id, status, personal_statement,
+ *   submitted_at, decision_at, created_at, updated_at,
+ *   programme: { id, name, slug, institution: { id, name, slug, ... } }
+ * }
+ */
+interface ApiApplication {
+  id: number;
+  status: 'draft' | 'submitted' | 'under_review' | 'accepted' | 'rejected' | 'waitlisted';
+  submitted_at: string | null;
+  decision_at:  string | null;
+  created_at:   string;
+  updated_at:   string;
+  programme: {
+    id:   number;
+    name: string;
+    slug: string;
+    institution: {
+      id:    number;
+      name:  string;
+      slug:  string;
+      short_name: string;
+    };
+  };
+}
+
+/**
+ * UI-flattened shape used by the row component.
+ */
+interface UiApplication {
+  id: string;
+  programmeName:   string;
+  institutionName: string;
+  status:          ApiApplication['status'];
+  submittedAt:     string | null;
+  decisionAt:      string | null;
+}
+
+function mapApplication(api: ApiApplication): UiApplication {
+  return {
+    id:              String(api.id),
+    programmeName:   api.programme?.name ?? 'Unknown programme',
+    institutionName: api.programme?.institution?.name ?? 'Unknown institution',
+    status:          api.status,
+    submittedAt:     api.submitted_at,
+    decisionAt:      api.decision_at,
+  };
+}
 
 export default function ApplicationsPage() {
-  const all = getMyApplications();
+  const [applications, setApplications] = React.useState<UiApplication[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError]     = React.useState<string | null>(null);
 
-  const submitted = all.filter(a => a.status !== 'draft');
-  const drafts    = all.filter(a => a.status === 'draft');
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const token = getToken();
+        const data  = await api.get<ApiApplication[]>('/applications', token ?? undefined);
+        setApplications(data.map(mapApplication));
+      } catch (err: any) {
+        setError(err.message || 'Could not load your applications.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const submitted = applications.filter(a => a.status !== 'draft');
+  const drafts    = applications.filter(a => a.status === 'draft');
 
   return (
     <div>
       <PageHeader
         eyebrow="My applications"
         title="Applications"
-        description="Every application you've started or submitted, in one place."
-        actions={
-          <Button asChild>
-            <Link href={ROUTES.institutions}>
-              <Plus className="size-4" />
-              New application
-            </Link>
-          </Button>
-        }
+        description="Every application you've submitted, in one place."
+      actions={
+        <Button asChild>
+          <Link href={ROUTES.programmes}>
+            <Plus className="size-4" />
+            Browse programmes
+          </Link>
+        </Button>
+      }
       />
 
-      {/* Submitted */}
-      <section className="mb-8">
-        <div className="flex items-end justify-between mb-3">
-          <h2 className="text-lg font-semibold text-ink">
-            Submitted{' '}
-            <span className="text-ink-50 font-normal">({submitted.length})</span>
-          </h2>
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="size-6 text-brand-600 animate-spin" />
         </div>
+      )}
 
-        {submitted.length === 0 ? (
-          <EmptyCard
-            title="No applications yet"
-            description="When you submit an application, it will appear here so you can track its status."
-            ctaLabel="Browse institutions"
-            ctaHref={ROUTES.institutions}
-          />
-        ) : (
-          <ul className="rounded-xl border border-border bg-white overflow-hidden divide-y divide-border">
-            {submitted.map(app => <ApplicationRow key={app.id} application={app} />)}
-          </ul>
-        )}
-      </section>
+      {error && !loading && (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft p-5">
+          <p className="text-sm text-danger">{error}</p>
+        </div>
+      )}
 
-      {/* Drafts */}
-      {drafts.length > 0 && (
-        <section>
-          <div className="flex items-end justify-between mb-3">
-            <h2 className="text-lg font-semibold text-ink">
-              Drafts{' '}
-              <span className="text-ink-50 font-normal">({drafts.length})</span>
-            </h2>
-            <p className="text-xs text-ink-50">Saved on this device</p>
-          </div>
+      {!loading && !error && (
+        <>
+          <section className="mb-8">
+            <div className="flex items-end justify-between mb-3">
+              <h2 className="text-lg font-semibold text-ink">
+                Submitted{' '}
+                <span className="text-ink-50 font-normal">({submitted.length})</span>
+              </h2>
+            </div>
 
-          <ul className="rounded-xl border border-border bg-white overflow-hidden divide-y divide-border">
-            {drafts.map(app => <ApplicationRow key={app.id} application={app} />)}
-          </ul>
-        </section>
+            {submitted.length === 0 ? (
+        <EmptyCard
+          title="No applications yet"
+          description="Browse programmes to find one that fits you. Once you submit an application, it will appear here."
+          ctaLabel="Browse programmes"
+          ctaHref={ROUTES.programmes}
+        />
+            ) : (
+              <ul className="rounded-xl border border-border bg-white overflow-hidden divide-y divide-border">
+                {submitted.map(app => <ApplicationRow key={app.id} application={app} />)}
+              </ul>
+            )}
+          </section>
+
+          {drafts.length > 0 && (
+            <section>
+              <div className="flex items-end justify-between mb-3">
+                <h2 className="text-lg font-semibold text-ink">
+                  Drafts{' '}
+                  <span className="text-ink-50 font-normal">({drafts.length})</span>
+                </h2>
+              </div>
+
+              <ul className="rounded-xl border border-border bg-white overflow-hidden divide-y divide-border">
+                {drafts.map(app => <ApplicationRow key={app.id} application={app} />)}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </div>
   );
@@ -84,16 +163,11 @@ export default function ApplicationsPage() {
    Row
 ───────────────────────────────── */
 
-function ApplicationRow({ application }: { application: Application }) {
-  const isDraft = application.status === 'draft';
-  const href = isDraft
-    ? ROUTES.institutions   // drafts don't have a real detail page yet
-    : ROUTES.application(application.id);
-
+function ApplicationRow({ application }: { application: UiApplication }) {
   return (
     <li>
       <Link
-        href={href}
+        href={ROUTES.application(application.id)}
         className="flex items-center gap-4 px-5 py-4 hover:bg-ink-5/60 transition-colors group"
       >
         <div className="grid place-items-center size-10 rounded-md bg-brand-50 text-brand-600 shrink-0">
@@ -125,10 +199,6 @@ function ApplicationRow({ application }: { application: Application }) {
     </li>
   );
 }
-
-/* ─────────────────────────────────
-   Empty state
-───────────────────────────────── */
 
 function EmptyCard({
   title, description, ctaLabel, ctaHref,

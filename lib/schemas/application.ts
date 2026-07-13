@@ -38,9 +38,7 @@ export type Grades = z.infer<typeof gradesSchema>;
    STEP 4 — Personal statement
 ───────────────────────────────── */
 export const personalStatementSchema = z.object({
-  statement: z.string()
-    .min(150, 'Personal statement must be at least 150 characters')
-    .max(3000, 'Personal statement must be 3000 characters or less'),
+  statement: z.string().max(3000, 'Too long').optional().or(z.literal('')),
 });
 export type PersonalStatement = z.infer<typeof personalStatementSchema>;
 

@@ -1,50 +1,103 @@
+'use client';
+
+import * as React from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
   CheckCircle2, Clock, MapPin, ArrowRight,
-  FileText, Calendar, GraduationCap,
+  FileText, Calendar, GraduationCap, Loader2, AlertCircle,
 } from 'lucide-react';
-import type { Metadata } from 'next';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { PageBackLink } from '@/components/shared/page-back-link';
 import { ROUTES } from '@/lib/routes';
 import { formatDate } from '@/lib/format';
-import {
-  getApplicationById, getInstitutionById, getProgrammeBySlug,
-  getMyApplications,
-} from '@/lib/data';
-import { programmes, currentUser, documents } from '@/lib/mock-data';
+import { api } from '@/lib/api';
+import { getToken, getAuthUser } from '@/lib/auth';
 import { cn } from '@/lib/utils';
-import type { ApplicationStatus } from '@/types/domain';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
+/**
+ * Shape from Laravel /api/applications/{id}
+ */
+interface ApiApplication {
+  id: number;
+  status: ApplicationStatus;
+  personal_statement: string | null;
+  submitted_at: string | null;
+  decision_at:  string | null;
+  created_at:   string;
+  updated_at:   string;
+  programme: {
+    id:            number;
+    name:          string;
+    slug:          string;
+    qualification: string;
+    school:        string;
+    duration_years: number;
+    study_mode:    string;
+    intake:        string;
+    institution: {
+      id:         number;
+      name:       string;
+      slug:       string;
+      short_name: string;
+      city:       string;
+    };
+  };
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { id } = await params;
-  const app = getApplicationById(id);
-  if (!app) return { title: 'Application not found' };
-  return { title: `Application: ${app.programmeName}` };
-}
+type ApplicationStatus =
+  | 'draft' | 'submitted' | 'under_review' | 'accepted' | 'rejected' | 'waitlisted';
 
-export function generateStaticParams() {
-  return getMyApplications().map(a => ({ id: a.id }));
-}
+export default function ApplicationDetailPage() {
+  const params = useParams();
+  const id     = String(params.id);
 
-export default async function ApplicationDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const application = getApplicationById(id);
-  if (!application) notFound();
+  const [application, setApplication] = React.useState<ApiApplication | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError]     = React.useState<string | null>(null);
 
-  const institution = getInstitutionById(application.institutionId);
-  const programme   = programmes.find(p => p.id === application.programmeId);
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const token = getToken();
+        const data = await api.get<ApiApplication>(`/applications/${id}`, token ?? undefined);
+        setApplication(data);
+      } catch (err: any) {
+        setError(err.message || 'Could not load application.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <Loader2 className="size-6 text-brand-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !application) {
+    return (
+      <div>
+        <PageBackLink href={ROUTES.applications} label="All applications" />
+        <div className="mt-6 rounded-xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
+          <AlertCircle className="size-5 text-danger shrink-0 mt-0.5" />
+          <p className="text-sm text-danger">{error || 'Application not found.'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const user        = getAuthUser();
+  const programme   = application.programme;
+  const institution = programme?.institution;
 
   return (
     <div>
-      {/* Back link */}
       <PageBackLink href={ROUTES.applications} label="All applications" />
 
       {/* Header */}
@@ -52,14 +105,12 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
         <div className="flex items-center gap-2 mb-3">
           <StatusBadge status={application.status} />
           {institution && (
-            <span className="text-sm text-ink-50">
-              {institution.shortName}
-            </span>
+            <span className="text-sm text-ink-50">{institution.short_name}</span>
           )}
         </div>
 
         <h1 className="font-display text-display-md text-ink leading-tight">
-          {application.programmeName}
+          {programme.name}
         </h1>
 
         {institution && (
@@ -79,79 +130,52 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
 
       {/* Body */}
       <div className="grid lg:grid-cols-[1fr_320px] gap-8 lg:gap-10">
-        {/* MAIN */}
         <div className="space-y-6">
           {/* Timeline */}
           <Section title="Application progress">
-            <Timeline status={application.status} application={application} />
+            <Timeline
+              status={application.status}
+              submittedAt={application.submitted_at}
+              decisionAt={application.decision_at}
+            />
           </Section>
 
           {/* What we sent */}
-          <Section title="Submitted application">
-            <div className="space-y-5 text-sm">
-              <Row label="Applicant" value={`${currentUser.firstName} ${currentUser.lastName}`} />
-              <Row label="NRC" value={currentUser.nrc} />
-              <Row label="Phone" value={currentUser.phone} />
-              <Row label="Province" value={currentUser.province} />
-              <Row label="Date of birth" value={formatDate(currentUser.dateOfBirth)} />
-            </div>
-          </Section>
-
-          {/* Grades */}
-          {programme && (
-            <Section title="Grade 12 ECZ results">
-              <table className="w-full text-sm">
-                <tbody>
-                  {currentUser.grades.map(g => (
-                    <tr key={g.subject} className="border-b border-border last:border-b-0">
-                      <td className="py-2.5 text-ink-70">{g.subject}</td>
-                      <td className="py-2.5 text-right">
-                        <span className="inline-flex items-center justify-center min-w-7 h-7 rounded-md bg-brand-50 text-brand-700 font-bold text-sm">
-                          {g.minGrade}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {user && (
+            <Section title="Applicant details">
+              <div className="space-y-3 text-sm">
+                <Row label="Name"     value={`${user.first_name} ${user.last_name}`} />
+                <Row label="Email"    value={user.email} />
+                <Row label="NRC"      value={user.nrc || '—'} />
+                <Row label="Phone"    value={user.phone || '—'} />
+                <Row label="Province" value={user.province || '—'} />
+              </div>
             </Section>
           )}
 
-          {/* Documents */}
-          <Section title="Attached documents">
-            <ul className="space-y-2">
-              {documents.map(doc => (
-                <li
-                  key={doc.id}
-                  className="flex items-center gap-3 p-3 rounded-md bg-surface-subtle border border-border"
-                >
-                  <div className="grid place-items-center size-8 rounded-md bg-brand-50 text-brand-600 shrink-0">
-                    <FileText className="size-4" />
-                  </div>
-                  <span className="text-sm font-medium text-ink flex-1 truncate">{doc.name}</span>
-                  {doc.verified && (
-                    <span className="text-[11px] font-semibold text-success bg-success-soft rounded-full px-2 py-0.5">
-                      Verified
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Section>
+          {/* Personal statement (if provided) */}
+          {application.personal_statement && (
+            <Section title="Personal statement">
+              <p className="text-sm text-ink-70 leading-relaxed whitespace-pre-wrap">
+                {application.personal_statement}
+              </p>
+            </Section>
+          )}
         </div>
 
         {/* SIDE */}
         <aside className="space-y-5 lg:sticky lg:top-24 self-start">
-          {/* Decision card (only when there's one) */}
-          {application.status === 'accepted' && application.decisionAt && (
+          {/* Decision card */}
+          {application.status === 'accepted' && application.decision_at && (
             <div className="rounded-xl bg-gradient-to-br from-brand-700 to-brand-600 p-5 text-white shadow-elevate">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="size-5" />
                 <p className="text-xs font-bold uppercase tracking-[0.08em]">Offer received</p>
               </div>
               <p className="text-sm text-white/85 leading-relaxed mb-4">
-                Congratulations! You&apos;ve been accepted to <strong>{application.programmeName}</strong>{' '}
-                on {formatDate(application.decisionAt)}.
+                Congratulations! You&apos;ve been accepted to{' '}
+                <strong>{programme.name}</strong>{' '}
+                on {formatDate(application.decision_at)}.
               </p>
               <Button asChild className="w-full bg-white text-brand-700 hover:bg-brand-50">
                 <Link href="#">
@@ -159,6 +183,17 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
+            </div>
+          )}
+
+          {application.status === 'rejected' && application.decision_at && (
+            <div className="rounded-xl border border-danger/30 bg-danger-soft p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-danger mb-2">
+                Application closed
+              </p>
+              <p className="text-sm text-ink-70 leading-relaxed">
+                This application was not successful. Don&apos;t give up — explore other programmes.
+              </p>
             </div>
           )}
 
@@ -172,16 +207,20 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
               <dl className="mt-3 space-y-2 text-xs text-ink-50">
                 <div className="flex items-center gap-1.5">
                   <Clock className="size-3 text-ink-30" />
-                  {programme.durationYears} years · {programme.studyMode}
+                  {programme.duration_years} years · {programme.study_mode}
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="size-3 text-ink-30" />
-                  Intake {programme.intake}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <GraduationCap className="size-3 text-ink-30" />
-                  {programme.faculty}
-                </div>
+                {programme.intake && (
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="size-3 text-ink-30" />
+                    Intake {programme.intake}
+                  </div>
+                )}
+                {programme.school && (
+                  <div className="flex items-center gap-1.5">
+                    <GraduationCap className="size-3 text-ink-30" />
+                    {programme.school}
+                  </div>
+                )}
               </dl>
               <Button asChild variant="outline" className="w-full mt-4">
                 <Link href={ROUTES.programme(programme.slug)}>View programme</Link>
@@ -189,17 +228,16 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Submitted dates */}
-          <div className="rounded-xl border border-border bg-white p-5 text-sm">
-            <Row label="Submitted" value={application.submittedAt ? formatDate(application.submittedAt) : '—'} />
-            {application.decisionAt && (
-              <div className="mt-3">
-                <Row label="Decision" value={formatDate(application.decisionAt)} />
-              </div>
+          {/* Dates */}
+          <div className="rounded-xl border border-border bg-white p-5 space-y-3 text-sm">
+            <Row
+              label="Submitted"
+              value={application.submitted_at ? formatDate(application.submitted_at) : '—'}
+            />
+            {application.decision_at && (
+              <Row label="Decision" value={formatDate(application.decision_at)} />
             )}
-            <div className="mt-3">
-              <Row label="Last updated" value={formatDate(application.lastUpdated)} />
-            </div>
+            <Row label="Last updated" value={formatDate(application.updated_at)} />
           </div>
         </aside>
       </div>
@@ -234,31 +272,44 @@ function Row({ label, value }: { label: string; value: string }) {
 ───────────────────────────────── */
 
 interface TimelineProps {
-  status: ApplicationStatus;
-  application: { submittedAt?: string; decisionAt?: string };
+  status:      ApplicationStatus;
+  submittedAt: string | null;
+  decisionAt:  string | null;
 }
 
-function Timeline({ status, application }: TimelineProps) {
-  const steps: { id: ApplicationStatus | 'review'; label: string; date?: string }[] = [
-    { id: 'submitted',    label: 'Application submitted', date: application.submittedAt },
-    { id: 'review',       label: 'Under review by institution' },
-    { id: status === 'accepted' || status === 'rejected' ? status : 'submitted',
-      label: status === 'accepted' ? 'Offer extended' : status === 'rejected' ? 'Application closed' : 'Decision pending',
-      date: application.decisionAt },
+function Timeline({ status, submittedAt, decisionAt }: TimelineProps) {
+  const steps = [
+    {
+      label: 'Application submitted',
+      date:  submittedAt,
+    },
+    {
+      label: 'Under review by institution',
+      date:  null,
+    },
+    {
+      label: status === 'accepted'
+        ? 'Offer extended'
+        : status === 'rejected'
+          ? 'Application closed'
+          : status === 'waitlisted'
+            ? 'Waitlisted'
+            : 'Decision pending',
+      date: decisionAt,
+    },
   ];
 
-  // Determine "active" index based on status
   const activeIndex =
-    status === 'accepted' || status === 'rejected' ? 2 :
+    status === 'accepted' || status === 'rejected' || status === 'waitlisted' ? 2 :
     status === 'under_review' ? 1 :
     status === 'submitted' ? 0 : 0;
 
   return (
     <ol className="space-y-5">
       {steps.map((step, i) => {
-        const done = i < activeIndex;
+        const done   = i < activeIndex;
         const active = i === activeIndex;
-        const ahead = i > activeIndex;
+        const ahead  = i > activeIndex;
 
         return (
           <li key={i} className="flex gap-4">

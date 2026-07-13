@@ -1,29 +1,56 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Loader2 } from 'lucide-react';
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/lib/routes';
-import { registerSchema, PROVINCES, type RegisterValues } from '@/lib/schemas/auth';
+import { registerSchema, type RegisterValues } from '@/lib/schemas/auth';
+import { api } from '@/lib/api';
+import { saveAuth, type AuthUser } from '@/lib/auth';
 
 export function RegisterForm() {
   const router = useRouter();
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      firstName: '', lastName: '', email: '', phone: '',
-      nrc: '', province: undefined as unknown as RegisterValues['province'],
+      firstName: '',
+      lastName: '',
+      email: '',
       password: '',
     },
   });
 
-  function onSubmit(values: RegisterValues) {
-    console.log('register', values);
-    router.push(ROUTES.dashboard);
+  async function onSubmit(values: RegisterValues) {
+    setServerError(null);
+
+    try {
+      const response = await api.post<{ user: AuthUser; token: string }>(
+        '/register',
+        {
+          first_name:            values.firstName,
+          last_name:             values.lastName,
+          email:                 values.email,
+          password:              values.password,
+          password_confirmation: values.password,
+        },
+      );
+
+      saveAuth(response.token, response.user);
+      router.push(ROUTES.welcome);
+    } catch (error: any) {
+      setServerError(
+        error.message || 'Something went wrong. Please try again.',
+      );
+    }
   }
 
   return (
@@ -36,7 +63,9 @@ export function RegisterForm() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>First name</FormLabel>
-                <FormControl><Input placeholder="Emmanuel" autoComplete="given-name" {...field} /></FormControl>
+                <FormControl>
+                  <Input placeholder="Emmanuel" autoComplete="given-name" {...field} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -47,7 +76,9 @@ export function RegisterForm() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Last name</FormLabel>
-                <FormControl><Input placeholder="Siamoonga" autoComplete="family-name" {...field} /></FormControl>
+                <FormControl>
+                  <Input placeholder="Siamoonga" autoComplete="family-name" {...field} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -60,52 +91,13 @@ export function RegisterForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Email address</FormLabel>
-              <FormControl><Input type="email" placeholder="you@example.com" autoComplete="email" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Phone number</FormLabel>
-              <FormControl><Input placeholder="+260 97X XXX XXX" autoComplete="tel" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="nrc"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>NRC Number</FormLabel>
-              <FormControl><Input placeholder="123456/78/9" {...field} /></FormControl>
-              <FormDescription>National Registration Card number</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="province"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Province</FormLabel>
               <FormControl>
-                {/* Native select for accessibility + small bundle */}
-                <select
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
                   {...field}
-                  className="flex h-10 w-full rounded-md border border-input bg-surface-subtle px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-brand-600 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-brand-600/10"
-                >
-                  <option value="" disabled>Select your province</option>
-                  {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -118,14 +110,39 @@ export function RegisterForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Password</FormLabel>
-              <FormControl><Input type="password" placeholder="At least 8 characters" autoComplete="new-password" {...field} /></FormControl>
+              <FormControl>
+                <Input
+                  type="password"
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                  {...field}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <Button type="submit" size="lg" className="w-full mt-2" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? 'Creating account…' : 'Create account'}
+        {serverError && (
+          <div className="rounded-md bg-danger-soft border border-danger/20 px-4 py-3">
+            <p className="text-sm text-danger font-medium">{serverError}</p>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full mt-2"
+          disabled={form.formState.isSubmitting}
+        >
+          {form.formState.isSubmitting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Creating account…
+            </>
+          ) : (
+            'Create account'
+          )}
         </Button>
 
         <p className="text-xs text-ink-50 text-center">

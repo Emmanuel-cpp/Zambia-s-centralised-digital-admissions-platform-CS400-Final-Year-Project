@@ -1,9 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ApplyWizard } from '@/components/apply/apply-wizard';
-import {
-  getProgrammeBySlug, getInstitutionById,
-} from '@/lib/data';
+import { getProgrammeBySlug, getInstitutionById } from '@/lib/data';
 
 interface PageProps {
   params: Promise<{ programmeSlug: string }>;
@@ -11,7 +9,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { programmeSlug } = await params;
-  const programme = getProgrammeBySlug(programmeSlug);
+  const programme = await getProgrammeBySlug(programmeSlug);
   return {
     title: programme ? `Apply: ${programme.name}` : 'Apply',
   };
@@ -19,10 +17,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ApplyPage({ params }: PageProps) {
   const { programmeSlug } = await params;
-  const programme = getProgrammeBySlug(programmeSlug);
+  const programme = await getProgrammeBySlug(programmeSlug);
   if (!programme) notFound();
 
-  const institution = getInstitutionById(programme.institutionId);
+  const institution = await getInstitutionById(programme.institutionId);
   if (!institution) notFound();
 
   return <ApplyWizard programme={programme} institution={institution} />;

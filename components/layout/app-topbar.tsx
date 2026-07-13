@@ -5,35 +5,22 @@ import { Bell, Search, Menu } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Logo } from './logo';
 import { ROUTES } from '@/lib/routes';
+import { useAuth } from '@/hooks/use-auth';
 
 interface AppTopbarProps {
   variant?: 'applicant' | 'institution';
-  /** Called when the user taps the hamburger (mobile/tablet) */
   onMenuClick?: () => void;
 }
 
-/**
- * AppTopbar — top bar across every portal page.
- *
- * Layout:
- *   [hamburger* + logo*]    [search (md+)]    [notifications]
- *
- *   * hamburger and logo are only visible below lg — at lg+ the sidebar
- *     handles branding, so this side of the topbar is empty.
- *
- * The avatar/account dropdown was intentionally removed — profile and sign-out
- * already live in the sidebar, and removing the avatar gives more breathing
- * room on small screens.
- */
 export function AppTopbar({
   variant = 'applicant',
   onMenuClick,
 }: AppTopbarProps) {
+  const { user } = useAuth();
+
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border bg-white/85 backdrop-blur-md">
       <div className="h-full px-4 sm:px-6 flex items-center justify-between gap-3 sm:gap-4">
-
-        {/* Left cluster — hamburger + logo (mobile/tablet only) */}
         <div className="flex items-center gap-3 lg:hidden shrink-0">
           <button
             type="button"
@@ -46,7 +33,6 @@ export function AppTopbar({
           <Logo />
         </div>
 
-        {/* Search (md+ only) */}
         <div className="hidden md:flex flex-1 max-w-md">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-ink-30" />
@@ -61,8 +47,7 @@ export function AppTopbar({
           </div>
         </div>
 
-        {/* Right cluster — notifications only */}
-        <div className="flex items-center gap-1 shrink-0 ml-auto">
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           <Link
             href={variant === 'applicant' ? ROUTES.notifications : '#'}
             aria-label="Notifications"
@@ -71,6 +56,17 @@ export function AppTopbar({
             <Bell className="size-5" />
             <span className="absolute top-2 right-2 size-1.5 rounded-full bg-warning" />
           </Link>
+
+          {user && (
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-md">
+              <div className="grid place-items-center size-8 rounded-md bg-brand-600 text-white text-xs font-bold">
+                {user.first_name[0]}{user.last_name[0]}
+              </div>
+              <span className="text-sm font-medium text-ink hidden sm:inline">
+                {user.first_name}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </header>

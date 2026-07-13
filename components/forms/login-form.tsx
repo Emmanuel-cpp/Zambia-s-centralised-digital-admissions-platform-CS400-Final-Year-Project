@@ -1,27 +1,61 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Loader2 } from 'lucide-react';
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/lib/routes';
 import { loginSchema, type LoginValues } from '@/lib/schemas/auth';
+import { api } from '@/lib/api';
+import { saveAuth, type AuthUser } from '@/lib/auth';
 
 export function LoginForm() {
   const router = useRouter();
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
 
-  function onSubmit(values: LoginValues) {
-    // Stubbed — real implementation will hit /api/auth/login
-    console.log('login', values);
-    router.push(ROUTES.dashboard);
+  async function onSubmit(values: LoginValues) {
+    setServerError(null);
+
+    try {
+      const response = await api.post<{ user: AuthUser; token: string }>(
+        '/login',
+        {
+          email:    values.email,
+          password: values.password,
+        },
+      );
+
+      // Persist token and user to localStorage
+      saveAuth(response.token, response.user);
+
+      // Forced password change comes before everything else
+      if (response.user.must_change_password) {
+        router.push(ROUTES.changePassword);
+      } else if (response.user.role === 'institution_admin') {
+        router.push(ROUTES.institutionDashboard);
+      } else if (!response.user.profile_complete) {
+        router.push(ROUTES.welcome);
+      } else {
+        router.push(ROUTES.dashboard);
+      }
+
+    } catch (error: any) {
+      setServerError(
+        error.message || 'Invalid email or password. Please try again.',
+      );
+    }
   }
 
   return (
@@ -34,7 +68,12 @@ export function LoginForm() {
             <FormItem>
               <FormLabel>Email address</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="you@example.com" autoComplete="email" {...field} />
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -48,20 +87,47 @@ export function LoginForm() {
             <FormItem>
               <div className="flex items-center justify-between">
                 <FormLabel>Password</FormLabel>
-                <Link href="#" className="text-xs text-brand-600 hover:underline font-medium">
+                <Link
+                  href="#"
+                  className="text-xs text-brand-600 hover:underline font-medium"
+                >
                   Forgot password?
                 </Link>
               </div>
               <FormControl>
-                <Input type="password" placeholder="••••••••" autoComplete="current-password" {...field} />
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <Button type="submit" size="lg" className="w-full mt-2" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+        {/* Server-side error message */}
+        {serverError && (
+          <div className="rounded-md bg-danger-soft border border-danger/20 px-4 py-3">
+            <p className="text-sm text-danger font-medium">{serverError}</p>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full mt-2"
+          disabled={form.formState.isSubmitting}
+        >
+          {form.formState.isSubmitting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Signing in…
+            </>
+          ) : (
+            'Sign in'
+          )}
         </Button>
       </form>
     </Form>
