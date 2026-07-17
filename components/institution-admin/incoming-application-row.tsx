@@ -20,6 +20,47 @@ function initialsFrom(name: string): string {
   return ((parts[0]?.[0] ?? '') + (parts.at(-1)?.[0] ?? '')).toUpperCase();
 }
 
+/**
+ * Requirements-match badge.
+ * Colour bands communicate eligibility at a glance:
+ *   ≥70  green  — meets/exceeds the published requirements
+ *   40–69 amber — borderline (near-misses in the mix)
+ *   <40  red    — substantially below requirements
+ *   null grey — programme has no requirements to rank against
+ */
+function MatchBadge({ score, dark }: { score?: number | null; dark?: boolean }) {
+  if (score === null || score === undefined) {
+    return (
+      <span
+        className={cn(
+          'hidden sm:inline-flex items-center justify-center min-w-[44px] rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+          dark ? 'bg-white/10 text-white/40' : 'bg-ink-5 text-ink-30',
+        )}
+        title="No requirements to rank against"
+      >
+        —
+      </span>
+    );
+  }
+
+  const band =
+    score >= 70 ? 'bg-success-soft text-success'
+    : score >= 40 ? 'bg-warning-soft text-warning'
+    : 'bg-danger-soft text-danger';
+
+  return (
+    <span
+      className={cn(
+        'hidden sm:inline-flex items-center justify-center min-w-[44px] rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+        band,
+      )}
+      title={`Meets ${score}% of entry requirements`}
+    >
+      {score}%
+    </span>
+  );
+}
+
 export function IncomingApplicationRow({
   application, dark = false, hideChevron = false,
 }: IncomingApplicationRowProps) {
@@ -38,7 +79,6 @@ export function IncomingApplicationRow({
       <div className="grid place-items-center size-10 rounded-md bg-brand-600 text-white font-display text-base shrink-0">
         {initials}
       </div>
-
       <div className="flex-1 min-w-0">
         <p className={cn(
           'text-sm font-semibold truncate',
@@ -53,16 +93,14 @@ export function IncomingApplicationRow({
           {application.programmeName}
         </p>
       </div>
-
+      <MatchBadge score={application.matchScore} dark={dark} />
       <span className={cn(
         'hidden sm:inline text-xs mr-1 tabular-nums',
         dark ? 'text-white/40' : 'text-ink-30',
       )}>
         {formatRelativeTime(application.submittedAt)}
       </span>
-
       <StatusBadge status={application.status} />
-
       {!hideChevron && (
         <ChevronRight className={cn(
           'size-4 hidden sm:block',

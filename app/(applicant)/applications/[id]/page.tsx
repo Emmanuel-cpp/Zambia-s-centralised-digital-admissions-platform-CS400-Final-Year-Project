@@ -4,8 +4,8 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  CheckCircle2, Clock, MapPin, ArrowRight,
-  FileText, Calendar, GraduationCap, Loader2, AlertCircle,
+  CheckCircle2, Clock, MapPin, IdCard,
+  Calendar, GraduationCap, Loader2, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -25,6 +25,7 @@ interface ApiApplication {
   personal_statement: string | null;
   submitted_at: string | null;
   decision_at:  string | null;
+  student_number: string | null;
   created_at:   string;
   updated_at:   string;
   programme: {
@@ -165,24 +166,36 @@ export default function ApplicationDetailPage() {
 
         {/* SIDE */}
         <aside className="space-y-5 lg:sticky lg:top-24 self-start">
-          {/* Decision card */}
+          {/* Acceptance card — with the student's official number */}
           {application.status === 'accepted' && application.decision_at && (
             <div className="rounded-xl bg-gradient-to-br from-brand-700 to-brand-600 p-5 text-white shadow-elevate">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="size-5" />
                 <p className="text-xs font-bold uppercase tracking-[0.08em]">Offer received</p>
               </div>
-              <p className="text-sm text-white/85 leading-relaxed mb-4">
+              <p className="text-sm text-white/85 leading-relaxed">
                 Congratulations! You&apos;ve been accepted to{' '}
                 <strong>{programme.name}</strong>{' '}
                 on {formatDate(application.decision_at)}.
               </p>
-              <Button asChild className="w-full bg-white text-brand-700 hover:bg-brand-50">
-                <Link href="#">
-                  Accept offer
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
+
+              {application.student_number && (
+                <div className="mt-4 rounded-lg bg-white/10 border border-white/20 p-4">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <IdCard className="size-4 text-white/70" />
+                    <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/70">
+                      Your student number
+                    </p>
+                  </div>
+                  <p className="font-display text-2xl tracking-wide tabular-nums">
+                    {application.student_number}
+                  </p>
+                  <p className="text-xs text-white/60 mt-1.5 leading-relaxed">
+                    Issued by {institution?.short_name ?? 'the institution'}. Keep it safe —
+                    you&apos;ll use it for registration and all official correspondence.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -245,9 +258,7 @@ export default function ApplicationDetailPage() {
   );
 }
 
-/* ─────────────────────────────────
-   Helpers
-───────────────────────────────── */
+/* Helpers */
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -267,9 +278,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-/* ─────────────────────────────────
-   Timeline
-───────────────────────────────── */
+/* Timeline */
 
 interface TimelineProps {
   status:      ApplicationStatus;

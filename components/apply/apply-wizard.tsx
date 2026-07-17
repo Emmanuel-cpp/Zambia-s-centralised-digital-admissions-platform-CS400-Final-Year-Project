@@ -14,12 +14,21 @@ import { cn } from '@/lib/utils';
 import { StepConfirm }   from './steps/step-confirm';
 import { StepStatement } from './steps/step-statement';
 import { StepReview }    from './steps/step-review';
+import { StepPayment }   from './steps/step-payment';
 
 const STEPS = [
   { id: 'confirm',   label: 'Confirm' },
   { id: 'statement', label: 'Statement' },
   { id: 'review',    label: 'Review' },
+  { id: 'payment',   label: 'Payment' },
 ] as const;
+
+interface PaymentDue {
+  amount:             string;
+  platform_fee:       string;
+  institution_amount: string;
+  currency:           string;
+}
 
 interface ApplyWizardProps {
   programme: Programme;
@@ -33,10 +42,13 @@ export function ApplyWizard({ programme, institution }: ApplyWizardProps) {
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [authChecked, setAuthChecked] = React.useState(false);
 
+  // Set when the draft application is created — drives the payment step.
+  const [applicationId, setApplicationId] = React.useState<number | null>(null);
+  const [paymentDue, setPaymentDue]       = React.useState<PaymentDue | null>(null);
+
   const { draft, update, clear, hydrated } = useDraftApplication(programme.slug);
 
-  /* Auth + profile completeness guard.
-     Runs once before any wizard UI renders. */
+  /* Auth + profile completeness guard. */
   React.useEffect(() => {
     const user = getAuthUser();
 
@@ -71,24 +83,40 @@ export function ApplyWizard({ programme, institution }: ApplyWizardProps) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  /**
+   * Review → creates the application as a DRAFT on the server.
+   * The response carries the fee breakdown; we then advance to the
+   * payment step. Only completed payment submits the application.
+   */
   async function handleSubmit() {
     setSubmitting(true);
     setSubmitError(null);
 
     try {
       const token = getToken();
-      const response = await api.post<any>('/applications', {
+      const response = await api.post<{
+        application: { id: number };
+        payment_due: PaymentDue;
+      }>('/applications', {
         programme_id:       Number(programme.id),
         personal_statement: draft?.statement ?? '',
       }, token ?? undefined);
 
-      clear();
-      router.push(ROUTES.application(String(response.id)));
-
+      setApplicationId(response.application.id);
+      setPaymentDue(response.payment_due);
+      setSubmitting(false);
+      goNext(); // → payment step
     } catch (err: any) {
-      setSubmitError(err.message || 'Could not submit your application. Please try again.');
+      setSubmitError(err.message || 'Could not save your application. Please try again.');
       setSubmitting(false);
     }
+  }
+
+  /** Called by StepPayment once the payment completes. */
+  function handlePaid() {
+    const id = applicationId;
+    clear();
+    router.push(ROUTES.application(String(id)));
   }
 
   const currentStep = STEPS[stepIndex];
@@ -151,12 +179,23 @@ export function ApplyWizard({ programme, institution }: ApplyWizardProps) {
               onSubmit={handleSubmit}
             />
           )}
+
+          {currentStep.id === 'payment' && applicationId && paymentDue && (
+            <StepPayment
+              applicationId={applicationId}
+              paymentDue={paymentDue}
+              institutionName={institution.name}
+              onPaid={handlePaid}
+            />
+          )}
         </div>
 
-        <div className="max-w-2xl mx-auto mt-10 pt-6 border-t border-border flex items-center justify-center gap-2 text-xs text-ink-50">
-          <Save className="size-3.5" />
-          Your progress is saved automatically.
-        </div>
+        {currentStep.id !== 'payment' && (
+          <div className="max-w-2xl mx-auto mt-10 pt-6 border-t border-border flex items-center justify-center gap-2 text-xs text-ink-50">
+            <Save className="size-3.5" />
+            Your progress is saved automatically.
+          </div>
+        )}
       </main>
     </div>
   );

@@ -138,4 +138,5 @@ export interface IncomingApplication {
   lastUpdated: string;
   applicant: ApplicantSnapshot;
   internalNote?: string;
+  matchScore?: number | null;
 }

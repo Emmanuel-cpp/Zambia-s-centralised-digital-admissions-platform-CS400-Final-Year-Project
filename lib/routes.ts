@@ -35,4 +35,5 @@ export const ROUTES = {
   institutionDecisions:    '/institution/decisions',
   institutionProgrammeNew:  '/institution/programmes/new',
   institutionProgrammeEdit: (id: string | number) => `/institution/programmes/${id}/edit`,
+  institutionSettings:     '/institution/settings',
 } as const;

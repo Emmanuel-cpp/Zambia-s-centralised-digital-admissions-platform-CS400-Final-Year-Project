@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Search, Download, X, SlidersHorizontal, Loader2, AlertCircle } from 'lucide-react';
+import { Search, Download, X, SlidersHorizontal, Loader2, AlertCircle, ArrowDownWideNarrow } from 'lucide-react';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { getToken } from '@/lib/auth';
 import type { IncomingApplication, ApplicationStatus } from '@/types/domain';
 
 type StatusFilter = 'all' | ApplicationStatus;
+type SortMode = 'newest' | 'match';
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'all',          label: 'All statuses' },
@@ -30,6 +31,7 @@ interface ApiAdminApplication {
   personal_statement: string | null;
   submitted_at: string | null;
   decision_at:  string | null;
+  match_score:  number | null;
   user: {
     id:         number;
     first_name: string;
@@ -59,6 +61,7 @@ function mapApplication(api: ApiAdminApplication): IncomingApplication {
     submittedAt:   api.submitted_at ?? '',
     decisionAt:    api.decision_at ?? undefined,
     lastUpdated:   api.decision_at ?? api.submitted_at ?? '',
+    matchScore:    api.match_score,
     applicant: {
       fullName:      api.user.full_name || `${api.user.first_name} ${api.user.last_name}`,
       email:         api.user.email,
@@ -81,6 +84,9 @@ export default function InstitutionApplicationsPage() {
   const [search,      setSearch]      = React.useState('');
   const [status,      setStatus]      = React.useState<StatusFilter>('all');
   const [programmeId, setProgrammeId] = React.useState('all');
+  const [sortMode,    setSortMode]    = React.useState<SortMode>('newest');
+
+  const [exporting, setExporting] = React.useState(false);
 
   React.useEffect(() => {
     async function load() {
@@ -97,6 +103,50 @@ export default function InstitutionApplicationsPage() {
     load();
   }, []);
 
+  /**
+   * Download the Excel export. Sends the current filters as query params
+   * so the file matches exactly what the admin sees on screen.
+   */
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const token = getToken();
+      const params = new URLSearchParams();
+      if (status !== 'all')      params.set('status', status);
+      if (programmeId !== 'all') params.set('programme_id', programmeId);
+      if (search.trim())         params.set('search', search.trim());
+
+      const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(
+        `${base}/api/admin/applications/export?${params.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/octet-stream',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error('Export failed. Please try again.');
+      }
+
+      const blob = await response.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `applications-by-school-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Could not export. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   // Build the list of unique programmes from the applications themselves
   // so the filter only shows programmes that actually have applications.
   const programmes = React.useMemo(() => {
@@ -105,16 +155,30 @@ export default function InstitutionApplicationsPage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [applications]);
 
-  const filtered = React.useMemo(() => applications.filter(app => {
-    if (status !== 'all' && app.status !== status) return false;
-    if (programmeId !== 'all' && app.programmeId !== programmeId) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const hay = `${app.applicant.fullName} ${app.applicant.email} ${app.applicant.nrc} ${app.programmeName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+  const filtered = React.useMemo(() => {
+    const rows = applications.filter(app => {
+      if (status !== 'all' && app.status !== status) return false;
+      if (programmeId !== 'all' && app.programmeId !== programmeId) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const hay = `${app.applicant.fullName} ${app.applicant.email} ${app.applicant.nrc} ${app.programmeName}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    if (sortMode === 'match') {
+      // Best match first; unranked (null) applications sink to the bottom.
+      return [...rows].sort((a, b) => {
+        const as = a.matchScore ?? -1;
+        const bs = b.matchScore ?? -1;
+        return bs - as;
+      });
     }
-    return true;
-  }), [applications, search, status, programmeId]);
+
+    // 'newest' — the API already returns newest-first.
+    return rows;
+  }, [applications, search, status, programmeId, sortMode]);
 
   const isFiltered = search !== '' || status !== 'all' || programmeId !== 'all';
 
@@ -125,8 +189,15 @@ export default function InstitutionApplicationsPage() {
         title="All applications"
         description={`${applications.length} total applications received this cycle`}
         actions={
-          <Button variant="outline">
-            <Download className="size-4" /> Export
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting || loading || applications.length === 0}
+          >
+            {exporting
+              ? <Loader2 className="size-4 animate-spin" />
+              : <Download className="size-4" />}
+            {exporting ? 'Exporting…' : 'Export'}
           </Button>
         }
       />
@@ -148,7 +219,7 @@ export default function InstitutionApplicationsPage() {
         <>
           {/* Filters */}
           <div className="rounded-xl border border-border bg-white p-4 mb-5">
-            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-ink-30" />
                 <Input
@@ -190,11 +261,27 @@ export default function InstitutionApplicationsPage() {
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
+
+              <select
+                value={sortMode}
+                onChange={e => setSortMode(e.target.value as SortMode)}
+                className="h-10 rounded-md border border-input bg-surface-subtle px-3 text-sm focus-visible:outline-none focus-visible:border-brand-600"
+                aria-label="Sort applications"
+              >
+                <option value="newest">Sort: Newest</option>
+                <option value="match">Sort: Best match</option>
+              </select>
             </div>
 
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
               <p className="text-xs text-ink-50">
                 <strong className="text-ink">{filtered.length}</strong> of {applications.length} applications
+                {sortMode === 'match' && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-brand-700 font-semibold">
+                    <ArrowDownWideNarrow className="size-3.5" />
+                    Ranked by requirements match
+                  </span>
+                )}
               </p>
               {isFiltered && (
                 <button

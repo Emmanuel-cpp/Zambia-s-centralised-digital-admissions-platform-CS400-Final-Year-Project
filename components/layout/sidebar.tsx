@@ -50,7 +50,7 @@ const INSTITUTION_NAV: NavGroup[] = [
       { label: 'Dashboard',    href: ROUTES.institutionDashboard,    icon: LayoutDashboard },
       { label: 'Programmes',   href: ROUTES.institutionProgrammes,   icon: GraduationCap },
       { label: 'Applications', href: ROUTES.institutionApplications, icon: ClipboardList },
-      { label: 'Decisions',    href: ROUTES.institutionDecisions,    icon: Settings },
+      { label: 'Settings',     href: ROUTES.institutionSettings,     icon: Settings },
     ],
   },
 ];
@@ -66,11 +66,6 @@ interface SidebarProps {
 /**
  * Sidebar — shared across applicant and institution portals.
  *
- * Above lg (1024px): renders as a permanent left sidebar.
- * Below lg: renders as a slide-in drawer controlled by `drawerOpen`.
- *
- * Both modes share the exact same nav markup, so we extract it into
- * a single inner component and render it twice with different framing.
  */
 export function Sidebar({
   variant, drawerOpen = false, onDrawerClose,

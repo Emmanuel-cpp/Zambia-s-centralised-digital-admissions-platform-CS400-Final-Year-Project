@@ -1,51 +1,124 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Bell, Check, GraduationCap, ClipboardCheck,
   AlertTriangle, FileCheck2, Sparkles, ArrowRight, BellOff,
+  Loader2, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatRelativeTime } from '@/lib/format';
-import type { Notification, NotificationType } from '@/types/domain';
+import { api } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
-interface Props {
-  initialNotifications: Notification[];
+/* Shape returned by GET /api/notifications */
+interface ApiNotification {
+  id:         number;
+  type:       string;
+  title:      string;
+  body:       string;
+  link:       string | null;
+  is_read:    boolean;
+  created_at: string;
 }
 
-const ICON_MAP: Record<NotificationType, React.ComponentType<{ className?: string }>> = {
-  application_submitted:    ClipboardCheck,
-  application_status_change: ClipboardCheck,
-  offer_received:           GraduationCap,
-  document_verified:        FileCheck2,
-  deadline_reminder:        AlertTriangle,
-  recommendation:           Sparkles,
-};
+interface ApiResponse {
+  notifications: ApiNotification[];
+  unread_count:  number;
+}
 
-const ACCENT_MAP: Record<NotificationType, string> = {
-  application_submitted:    'bg-info-soft text-info',
-  application_status_change: 'bg-warning-soft text-warning',
-  offer_received:           'bg-success-soft text-success',
-  document_verified:        'bg-brand-50 text-brand-700',
-  deadline_reminder:        'bg-warning-soft text-warning',
-  recommendation:           'bg-brand-50 text-brand-700',
-};
+/* Map backend notification types → icons.
+   Backend types are application_{status} (e.g. application_accepted). */
+function iconFor(type: string): React.ComponentType<{ className?: string }> {
+  if (type === 'application_accepted')     return GraduationCap;
+  if (type === 'application_rejected')     return ClipboardCheck;
+  if (type === 'application_waitlisted')   return AlertTriangle;
+  if (type === 'application_under_review') return FileCheck2;
+  if (type.startsWith('recommendation'))   return Sparkles;
+  return Bell;
+}
 
-export function NotificationsList({ initialNotifications }: Props) {
-  const [items, setItems] = React.useState<Notification[]>(initialNotifications);
-  const [filter, setFilter] = React.useState<'all' | 'unread'>('all');
+function accentFor(type: string): string {
+  if (type === 'application_accepted')     return 'bg-success-soft text-success';
+  if (type === 'application_rejected')     return 'bg-danger-soft text-danger';
+  if (type === 'application_waitlisted')   return 'bg-warning-soft text-warning';
+  if (type === 'application_under_review') return 'bg-brand-50 text-brand-700';
+  return 'bg-brand-50 text-brand-700';
+}
 
-  const visible = filter === 'unread' ? items.filter(n => !n.read) : items;
-  const unreadCount = items.filter(n => !n.read).length;
+export function NotificationsList() {
+  const router = useRouter();
 
-  function markAllAsRead() {
-    setItems(prev => prev.map(n => ({ ...n, read: true })));
+  const [items, setItems]     = React.useState<ApiNotification[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError]     = React.useState<string | null>(null);
+  const [filter, setFilter]   = React.useState<'all' | 'unread'>('all');
+
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const token = getToken();
+        const data = await api.get<ApiResponse>('/notifications', token ?? undefined);
+        setItems(data.notifications);
+      } catch (err: any) {
+        setError(err.message || 'Could not load notifications.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const visible     = filter === 'unread' ? items.filter(n => !n.is_read) : items;
+  const unreadCount = items.filter(n => !n.is_read).length;
+
+  async function markAllAsRead() {
+    // Optimistic update — flip the UI immediately, sync in background
+    setItems(prev => prev.map(n => ({ ...n, is_read: true })));
+    try {
+      const token = getToken();
+      await api.post('/notifications/read-all', {}, token ?? undefined);
+    } catch {
+      // Silent — worst case the flags reappear on next load
+    }
   }
 
-  function toggleRead(id: string) {
-    setItems(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n));
+  async function handleOpen(notification: ApiNotification) {
+    // Mark as read (optimistically), then navigate if it has a link
+    if (!notification.is_read) {
+      setItems(prev => prev.map(n =>
+        n.id === notification.id ? { ...n, is_read: true } : n,
+      ));
+      try {
+        const token = getToken();
+        await api.post(`/notifications/${notification.id}/read`, {}, token ?? undefined);
+      } catch {
+        // Silent — non-critical
+      }
+    }
+
+    if (notification.link) {
+      router.push(notification.link);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="size-6 text-brand-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-danger/30 bg-danger-soft p-5 flex items-start gap-3">
+        <AlertCircle className="size-5 text-danger shrink-0 mt-0.5" />
+        <p className="text-sm text-danger">{error}</p>
+      </div>
+    );
   }
 
   return (
@@ -82,7 +155,7 @@ export function NotificationsList({ initialNotifications }: Props) {
             <NotificationItem
               key={n.id}
               notification={n}
-              onToggleRead={() => toggleRead(n.id)}
+              onOpen={() => handleOpen(n)}
             />
           ))}
         </ul>
@@ -91,34 +164,30 @@ export function NotificationsList({ initialNotifications }: Props) {
   );
 }
 
-/* ─────────────────────────────────
-   Notification item
-───────────────────────────────── */
+/* Notification item */
 
 function NotificationItem({
-  notification, onToggleRead,
-}: { notification: Notification; onToggleRead: () => void }) {
-  const Icon = ICON_MAP[notification.type];
-
-  const Wrapper: React.ElementType = notification.linkHref ? Link : 'div';
-  const wrapperProps = notification.linkHref ? { href: notification.linkHref } : {};
+  notification, onOpen,
+}: { notification: ApiNotification; onOpen: () => void }) {
+  const Icon = iconFor(notification.type);
 
   return (
     <li>
-      <Wrapper
-        {...wrapperProps}
+      <button
+        type="button"
+        onClick={onOpen}
         className={cn(
-          'flex items-start gap-4 p-4 sm:p-5 rounded-xl border transition-colors',
-          notification.read
+          'w-full text-left flex items-start gap-4 p-4 sm:p-5 rounded-xl border transition-colors',
+          notification.is_read
             ? 'bg-white border-border'
             : 'bg-brand-50/40 border-brand-200',
-          notification.linkHref && 'hover:border-brand-300 cursor-pointer',
+          notification.link && 'hover:border-brand-300 cursor-pointer',
         )}
       >
         {/* Icon */}
         <div className={cn(
           'grid place-items-center size-10 rounded-lg shrink-0',
-          ACCENT_MAP[notification.type],
+          accentFor(notification.type),
         )}>
           <Icon className="size-5" />
         </div>
@@ -128,11 +197,11 @@ function NotificationItem({
           <div className="flex items-start justify-between gap-3">
             <p className={cn(
               'text-sm leading-snug',
-              notification.read ? 'text-ink' : 'font-semibold text-ink',
+              notification.is_read ? 'text-ink' : 'font-semibold text-ink',
             )}>
               {notification.title}
             </p>
-            {!notification.read && (
+            {!notification.is_read && (
               <span className="size-2 rounded-full bg-brand-600 shrink-0 mt-1.5" aria-label="Unread" />
             )}
           </div>
@@ -141,31 +210,19 @@ function NotificationItem({
 
           <div className="flex items-center justify-between gap-3 mt-3">
             <p className="text-xs text-ink-30">
-              {formatRelativeTime(notification.createdAt)}
+              {formatRelativeTime(notification.created_at)}
             </p>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleRead(); }}
-                className="text-xs font-medium text-ink-50 hover:text-brand-700"
-              >
-                {notification.read ? 'Mark unread' : 'Mark read'}
-              </button>
-              {notification.linkHref && (
-                <ArrowRight className="size-3.5 text-ink-30" />
-              )}
-            </div>
+            {notification.link && (
+              <ArrowRight className="size-3.5 text-ink-30" />
+            )}
           </div>
         </div>
-      </Wrapper>
+      </button>
     </li>
   );
 }
 
-/* ─────────────────────────────────
-   Filter chip
-───────────────────────────────── */
+/* Filter chip */
 
 function FilterChip({
   label, active, onClick,
@@ -186,9 +243,7 @@ function FilterChip({
   );
 }
 
-/* ─────────────────────────────────
-   Empty state
-───────────────────────────────── */
+/* Empty state */
 
 function EmptyState({ filter }: { filter: 'all' | 'unread' }) {
   if (filter === 'unread') {
