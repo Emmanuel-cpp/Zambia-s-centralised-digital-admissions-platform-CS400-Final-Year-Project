@@ -45,6 +45,9 @@ const schema = z.object({
   qualification:  z.enum(QUALIFICATIONS),
   school:         z.string().min(2, 'Please choose or enter a school').max(255),
   duration_years: z.coerce.number().int().min(1, 'At least 1 year').max(8, 'At most 8 years'),
+  
+  capacity: z.coerce.number().int().min(1, 'At least 1').max(100000).optional().nullable()
+    .or(z.literal('').transform(() => null)),
   study_mode:     z.enum(STUDY_MODES),
   intake:         z.string().min(2, 'Please enter the intake (e.g. January 2026)').max(100),
   description:    z.string().max(5000).optional().nullable(),
@@ -92,6 +95,7 @@ export function ProgrammeForm({
         { subject: 'Mathematics',      min_grade: 5 },
         { subject: 'English Language', min_grade: 5 },
       ],
+      capacity: initialValues?.capacity ?? null,
     },
   });
 
@@ -156,6 +160,26 @@ export function ProgrammeForm({
               <FormMessage />
             </FormItem>
           )} />
+
+          <FormField control={form.control} name="capacity" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Capacity</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="Leave blank for unlimited"
+                    {...field}
+                    value={field.value ?? ''}
+                  />
+                </FormControl>
+                <FormDescription>
+                  When this many active applications are reached, the programme
+                  closes to new applicants automatically.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
 
           <div className="grid sm:grid-cols-2 gap-4">
             <FormField control={form.control} name="qualification" render={({ field }) => (

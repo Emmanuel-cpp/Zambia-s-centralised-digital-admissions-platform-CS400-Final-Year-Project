@@ -14,6 +14,7 @@ export const ROUTES = {
   register:         '/register',
   welcome:          '/welcome',          // Post-registration welcome screen
   changePassword:   '/change-password',
+  join:             '/join',
 
   // Applicant portal
   dashboard:        '/dashboard',
@@ -36,4 +37,6 @@ export const ROUTES = {
   institutionProgrammeNew:  '/institution/programmes/new',
   institutionProgrammeEdit: (id: string | number) => `/institution/programmes/${id}/edit`,
   institutionSettings:     '/institution/settings',
+  institutionTeam:         '/institution/team',
+  institutionActivity:     '/institution/activity',
 } as const;

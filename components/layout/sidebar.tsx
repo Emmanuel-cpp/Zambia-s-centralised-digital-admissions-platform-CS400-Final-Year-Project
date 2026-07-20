@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, ClipboardList, Sparkles, User,
-  FileText, Bell, LogOut, GraduationCap, Settings, X,
+  FileText, Bell, LogOut, GraduationCap, Settings, X, Users, ScrollText
 } from 'lucide-react';
 import { Logo } from './logo';
 import { ROUTES } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { getToken, clearAuth } from '@/lib/auth';
+import { getToken, clearAuth, getAuthUser} from '@/lib/auth';
 
 interface NavItem {
   label: string;
@@ -43,17 +43,21 @@ const APPLICANT_NAV: NavGroup[] = [
   },
 ];
 
-const INSTITUTION_NAV: NavGroup[] = [
-  {
-    label: 'Administration',
-    items: [
-      { label: 'Dashboard',    href: ROUTES.institutionDashboard,    icon: LayoutDashboard },
-      { label: 'Programmes',   href: ROUTES.institutionProgrammes,   icon: GraduationCap },
-      { label: 'Applications', href: ROUTES.institutionApplications, icon: ClipboardList },
-      { label: 'Settings',     href: ROUTES.institutionSettings,     icon: Settings },
-    ],
-  },
-];
+function institutionNavFor(adminRole: string | null | undefined): NavGroup[] {
+  const items: NavItem[] = [
+    { label: 'Dashboard',    href: ROUTES.institutionDashboard,    icon: LayoutDashboard },
+    { label: 'Programmes',   href: ROUTES.institutionProgrammes,   icon: GraduationCap },
+    { label: 'Applications', href: ROUTES.institutionApplications, icon: ClipboardList },
+  ];
+
+if (adminRole === 'owner') {
+    items.push({ label: 'Activity', href: ROUTES.institutionActivity, icon: ScrollText });
+    items.push({ label: 'Team',     href: ROUTES.institutionTeam,     icon: Users });
+    items.push({ label: 'Settings', href: ROUTES.institutionSettings, icon: Settings });
+  }
+
+  return [{ label: 'Administration', items }];
+}
 
 interface SidebarProps {
   variant: 'applicant' | 'institution';
@@ -71,7 +75,10 @@ export function Sidebar({
   variant, drawerOpen = false, onDrawerClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const groups = variant === 'applicant' ? APPLICANT_NAV : INSTITUTION_NAV;
+  const authUser = getAuthUser();
+  const groups = variant === 'applicant'
+    ? APPLICANT_NAV
+    : institutionNavFor(authUser?.admin_role);
 
   // Close drawer on route change
   React.useEffect(() => {

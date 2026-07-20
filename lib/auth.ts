@@ -23,6 +23,7 @@ export interface AuthUser {
   must_change_password: boolean;
    interests: string[];
   institution_id: number | null;
+  admin_role: 'owner' | 'admissions_officer' | 'viewer' | null;
 }
 
 export function saveAuth(token: string, user: AuthUser): void {

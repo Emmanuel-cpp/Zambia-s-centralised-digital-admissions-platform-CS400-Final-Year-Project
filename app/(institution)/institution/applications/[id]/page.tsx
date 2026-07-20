@@ -59,6 +59,20 @@ interface ApiAdminApplicationDetail {
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+/**
+ * Mirror of the backend decision state machine (the API enforces it;
+ * this drives the UI). Acceptance is terminal: the offer has been
+ * communicated and a student number issued. Rejections are reversible
+ * (appeals); waitlist promotion is the standard path when seats open.
+ */
+const ALLOWED_TRANSITIONS: Record<string, ApplicationStatus[]> = {
+  submitted:    ['under_review', 'accepted', 'rejected', 'waitlisted'],
+  under_review: ['accepted', 'rejected', 'waitlisted'],
+  waitlisted:   ['accepted', 'rejected'],
+  rejected:     ['waitlisted', 'accepted'],
+  accepted:     [],
+};
+
 export default function ApplicantDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -282,12 +296,58 @@ export default function ApplicantDetailPage() {
         {/* Decision sidebar */}
         <aside className="lg:sticky lg:top-24 self-start space-y-4">
           <Section title="Decision">
-            <div className="space-y-2 mb-5">
-              <DecisionButton icon={<Clock className="size-4" />}         label="Mark under review" value="under_review" current={status} onClick={setStatus} />
-              <DecisionButton icon={<Check className="size-4" />}         label="Accept"            value="accepted"     current={status} onClick={setStatus} accent="success" />
-              <DecisionButton icon={<AlertTriangle className="size-4" />} label="Waitlist"          value="waitlisted"   current={status} onClick={setStatus} accent="warning" />
-              <DecisionButton icon={<X className="size-4" />}             label="Reject"            value="rejected"     current={status} onClick={setStatus} accent="danger" />
-            </div>
+            {application.status === 'accepted' ? (
+              /* Terminal state — offer communicated, number issued */
+              <div className="rounded-lg bg-success-soft border border-success/30 p-4 mb-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <ShieldCheck className="size-4 text-success" />
+                  <p className="text-sm font-semibold text-ink">Offer extended — final</p>
+                </div>
+                <p className="text-xs text-ink-70 leading-relaxed">
+                  This applicant has been accepted and notified
+                  {application.decision_at ? ` on ${formatDate(application.decision_at)}` : ''}.
+                  Accepted offers cannot be reversed from here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 mb-5">
+                <DecisionButton
+                  icon={<Clock className="size-4" />}
+                  label="Mark under review"
+                  value="under_review"
+                  current={status}
+                  savedStatus={application.status}
+                  onClick={setStatus}
+                />
+                <DecisionButton
+                  icon={<Check className="size-4" />}
+                  label="Accept"
+                  value="accepted"
+                  current={status}
+                  savedStatus={application.status}
+                  onClick={setStatus}
+                  accent="success"
+                />
+                <DecisionButton
+                  icon={<AlertTriangle className="size-4" />}
+                  label="Waitlist"
+                  value="waitlisted"
+                  current={status}
+                  savedStatus={application.status}
+                  onClick={setStatus}
+                  accent="warning"
+                />
+                <DecisionButton
+                  icon={<X className="size-4" />}
+                  label="Reject"
+                  value="rejected"
+                  current={status}
+                  savedStatus={application.status}
+                  onClick={setStatus}
+                  accent="danger"
+                />
+              </div>
+            )}
 
             <div className="pt-4 border-t border-border">
               <label
@@ -388,40 +448,48 @@ function TimelineRow({ label, value }: { label: string; value: string }) {
 }
 
       function DecisionButton({
-        icon, label, value, current, onClick, accent,
-      }: {
-        icon:    React.ReactNode;
-        label:   string;
-        value:   ApplicationStatus;
-        current: ApplicationStatus;
-        onClick: (v: ApplicationStatus) => void;
-        accent?: 'success' | 'warning' | 'danger';
-      }) {
-        const active = current === value;
+  icon, label, value, current, savedStatus, onClick, accent,
+}: {
+  icon:        React.ReactNode;
+  label:       string;
+  value:       ApplicationStatus;
+  current:     ApplicationStatus;
+  savedStatus: ApplicationStatus;
+  onClick:     (v: ApplicationStatus) => void;
+  accent?:     'success' | 'warning' | 'danger';
+}) {
+  const active = current === value;
 
-        // Each button has a solid color background matching its action
-        const colorStyles =
-          accent === 'success' ? 'bg-success hover:bg-success/90 text-white'   :
-          accent === 'warning' ? 'bg-warning hover:bg-warning/90 text-white'   :
-          accent === 'danger'  ? 'bg-danger  hover:bg-danger/90  text-white'   :
-                                'bg-brand-600 hover:bg-brand-700 text-white';
+  // A move is permitted if it's staying put, or the state machine allows
+  // the transition from the SAVED status (not the on-screen selection).
+  const permitted =
+    value === savedStatus ||
+    (ALLOWED_TRANSITIONS[savedStatus] ?? []).includes(value);
 
-        return (
-          <button
-            type="button"
-            onClick={() => onClick(value)}
-            className={cn(
-              'w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-md text-sm font-semibold transition-colors',
-              colorStyles,
-              // When selected, add a ring to show it's the chosen option
-              active && 'ring-2 ring-offset-2 ring-ink/20',
-            )}
-          >
-            {icon}{label}
-            {active && <Check className="size-3.5 ml-auto" strokeWidth={3} />}
-          </button>
-        );
-      }
+  const colorStyles =
+    accent === 'success' ? 'bg-success hover:bg-success/90 text-white'   :
+    accent === 'warning' ? 'bg-warning hover:bg-warning/90 text-white'   :
+    accent === 'danger'  ? 'bg-danger  hover:bg-danger/90  text-white'   :
+                           'bg-brand-600 hover:bg-brand-700 text-white';
+
+  return (
+    <button
+      type="button"
+      onClick={() => permitted && onClick(value)}
+      disabled={!permitted}
+      title={permitted ? undefined : `Not available from "${savedStatus.replace('_', ' ')}"`}
+      className={cn(
+        'w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-md text-sm font-semibold transition-colors',
+        colorStyles,
+        active && 'ring-2 ring-offset-2 ring-ink/20',
+        !permitted && 'opacity-35 cursor-not-allowed hover:bg-none',
+      )}
+    >
+      {icon}{label}
+      {active && <Check className="size-3.5 ml-auto" strokeWidth={3} />}
+    </button>
+  );
+}
 function documentTypeLabel(type: string): string {
   switch (type) {
     case 'nrc_front':   return 'NRC — Front';

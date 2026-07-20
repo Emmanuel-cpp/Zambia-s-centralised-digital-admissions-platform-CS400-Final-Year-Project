@@ -20,6 +20,7 @@ interface ApiProgramme {
   intake:         string;
   description:    string | null;
   requirements:   { subject: string; min_grade: number }[];
+  capacity: number | null;
 }
 
 export default function EditProgrammePage() {
@@ -74,6 +75,7 @@ export default function EditProgrammePage() {
     intake:         programme.intake,
     description:    programme.description,
     requirements:   programme.requirements,
+    capacity: programme.capacity,
   };
 
   return (

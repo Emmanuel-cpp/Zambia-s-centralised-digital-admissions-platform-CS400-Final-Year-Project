@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { cn } from '@/lib/utils';
+import { OwnerGuard } from '@/components/institution-admin/owner-guard';
 
 const PROVINCES = [
   'Central', 'Copperbelt', 'Eastern', 'Luapula', 'Lusaka',
@@ -53,6 +54,14 @@ interface ApiInstitution {
 }
 
 export default function InstitutionSettingsPage() {
+  return (
+    <OwnerGuard>
+      <SettingsPageInner />
+    </OwnerGuard>
+  );
+}
+
+function SettingsPageInner() {
   const [loading, setLoading]       = React.useState(true);
   const [loadError, setLoadError]   = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
