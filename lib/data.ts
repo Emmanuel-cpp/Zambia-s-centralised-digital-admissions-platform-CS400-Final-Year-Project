@@ -179,7 +179,7 @@ function mapInstitution(d: any): Institution {
     province:                 d.province,
     description:              d.description ?? '',
     established:              d.established,
-    programmeCount:           d.programmes?.length ?? 0,
+    programmeCount:           d.programmes_count ?? d.programmes?.length ?? 0,
     applicationDeadline:      d.application_deadline,
     isAcceptingApplications:  d.is_accepting_applications,
     brandColor:               '#1B6B3A',

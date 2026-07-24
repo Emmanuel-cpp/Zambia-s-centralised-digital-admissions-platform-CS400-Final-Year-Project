@@ -61,7 +61,24 @@ export function StepPayment({
   const [error, setError]       = React.useState<string | null>(null);
   const [payment, setPayment]   = React.useState<ApiPayment | null>(null);
 
-  const phoneValid = /^[0-9+]{10,15}$/.test(phone.trim());
+  // Zambian mobile numbers: 10 digits (or +260 international form),
+  // with a prefix belonging to the selected provider.
+  const PROVIDER_PREFIXES: Record<string, string[]> = {
+    airtel: ['097', '077', '057'],
+    mtn:    ['096', '076', '056'],
+    zamtel: ['095', '075', '055'],
+  };
+
+  const normalizedPhone = React.useMemo(() => {
+    let p = phone.replace(/\s+/g, '');
+    if (p.startsWith('+260')) p = '0' + p.slice(4);
+    return p;
+  }, [phone]);
+
+  const phoneFormatOk  = /^0\d{9}$/.test(normalizedPhone);
+  const phonePrefixOk  = phoneFormatOk &&
+    (PROVIDER_PREFIXES[provider] ?? []).includes(normalizedPhone.slice(0, 3));
+  const phoneValid = phoneFormatOk && phonePrefixOk;
 
   async function handlePay() {
     setBusy(true);
@@ -74,7 +91,7 @@ export function StepPayment({
       const created = await api.post<ApiPayment>('/payments', {
         application_id: applicationId,
         provider,
-        phone: phone.trim(),
+        phone: normalizedPhone,
       }, token ?? undefined);
       setPayment(created);
 
@@ -230,9 +247,16 @@ export function StepPayment({
         placeholder="e.g. 0977123456"
         className="w-full h-11 rounded-md border border-input bg-surface-subtle px-3 text-sm focus-visible:outline-none focus-visible:border-brand-600 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-brand-600/10"
       />
-      <p className="text-xs text-ink-50 mt-1.5">
-        The payment request will be sent to this number.
-      </p>
+      {phone.length >= 10 && phoneFormatOk && !phonePrefixOk ? (
+        <p className="text-xs text-warning mt-1.5">
+          This doesn&apos;t look like a {PROVIDERS.find(p => p.value === provider)?.label} number —
+          check the number or switch provider above.
+        </p>
+      ) : (
+        <p className="text-xs text-ink-50 mt-1.5">
+          10 digits, e.g. 0977123456. The payment request will be sent to this number.
+        </p>
+      )}
 
       {error && (
         <div className="mt-4 rounded-md bg-danger-soft border border-danger/20 px-3 py-2.5 flex items-start gap-2">

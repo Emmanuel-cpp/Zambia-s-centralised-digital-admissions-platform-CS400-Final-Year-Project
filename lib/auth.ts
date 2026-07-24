@@ -18,7 +18,7 @@ export interface AuthUser {
   nrc: string | null;
   phone: string | null;
   province: string | null;
-  role: 'student' | 'institution_admin';
+  role: 'student' | 'institution_admin' | 'platform_admin';
   profile_complete: boolean;
   must_change_password: boolean;
    interests: string[];

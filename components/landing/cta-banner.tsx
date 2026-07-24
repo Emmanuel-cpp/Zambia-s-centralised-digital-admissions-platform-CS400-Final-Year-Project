@@ -1,14 +1,24 @@
+'use client';
+
+import * as React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/lib/routes';
-
-const CTA_STATS = [
-  { value: '2,400+', label: 'Applications this cycle' },
-  { value: '94%',    label: 'Applicant satisfaction' },
-  { value: '5 min',  label: 'Average profile setup time' },
-] as const;
+import { getAuthUser, type AuthUser } from '@/lib/auth';
+import { useStats } from '@/hooks/use-stats';
 
 export function CtaBanner() {
+  const [user, setUser] = React.useState<AuthUser | null>(null);
+  React.useEffect(() => { setUser(getAuthUser()); }, []);
+
+  const stats = useStats();
+
+  const ctaStats = [
+    { value: stats ? stats.applications.toLocaleString() : '—', label: 'Applications this cycle' },
+    { value: stats ? stats.documents_verified.toLocaleString() : '—', label: 'Documents AI-verified' },
+    { value: stats ? stats.programmes.toLocaleString() : '—', label: 'Programmes listed' },
+  ];
+
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-brand-800 via-brand-600 to-brand-500">
       <div aria-hidden className="absolute -right-24 -bottom-24 size-96 rounded-full bg-white/[0.04]" />
@@ -20,17 +30,19 @@ export function CtaBanner() {
             Start your application today.
           </h2>
           <p className="mt-3 text-base sm:text-lg text-white/70 leading-relaxed max-w-xl">
-            Join thousands of Zambian students who have already simplified their path to higher education.
+            Join Zambian students who have already simplified their path to higher education.
             Free to join. Five minutes to create your profile.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <Button
-              size="lg"
-              asChild
-              className="bg-white text-brand-700 hover:bg-brand-50 hover:text-brand-700 shadow-soft"
-            >
-              <Link href={ROUTES.register}>Create free account</Link>
-            </Button>
+            {!user && (
+              <Button
+                size="lg"
+                asChild
+                className="bg-white text-brand-700 hover:bg-brand-50 hover:text-brand-700 shadow-soft"
+              >
+                <Link href={ROUTES.register}>Create free account</Link>
+              </Button>
+            )}
             <Button
               size="lg"
               variant="outline"
@@ -43,7 +55,7 @@ export function CtaBanner() {
         </div>
 
         <div className="hidden lg:flex flex-col gap-3 shrink-0">
-          {CTA_STATS.map(stat => (
+          {ctaStats.map(stat => (
             <div
               key={stat.label}
               className="rounded-xl bg-white/10 border border-white/15 px-6 py-4 min-w-[200px]"

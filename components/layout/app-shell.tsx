@@ -5,7 +5,7 @@ import { Sidebar } from './sidebar';
 import { AppTopbar } from './app-topbar';
 
 interface AppShellProps {
-  variant?: 'applicant' | 'institution';
+  variant?: 'applicant' | 'institution' | 'platform';
   children: React.ReactNode;
 }
 

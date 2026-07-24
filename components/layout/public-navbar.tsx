@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, ArrowRight, LayoutDashboard } from 'lucide-react';
 import { Logo } from './logo';
-import { ROUTES } from '@/lib/routes';
+import { ROUTES, homeRouteFor } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -47,9 +47,7 @@ export function PublicNavbar({ transparent = false }: PublicNavbarProps) {
 
   const isOverHero  = transparent && !scrolled;
   const isLoggedIn  = !loading && !!user;
-  const dashboardHref = user?.role === 'institution_admin'
-    ? ROUTES.institutionDashboard
-    : ROUTES.dashboard;
+  const dashboardHref = homeRouteFor(user?.role);
 
   return (
     <>

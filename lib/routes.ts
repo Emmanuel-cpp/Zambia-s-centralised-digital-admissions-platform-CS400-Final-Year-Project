@@ -39,4 +39,17 @@ export const ROUTES = {
   institutionSettings:     '/institution/settings',
   institutionTeam:         '/institution/team',
   institutionActivity:     '/institution/activity',
+  
+  // ZamAdmit platform administration
+  platformDashboard:    '/platform',
+  platformInstitutions: '/platform/institutions',
+  platformInstitutionNew: '/platform/institutions/new',
+  platformInstitution:  (id: string | number) => `/platform/institutions/${id}`,
+  platformActivity:     '/platform/activity',
 } as const;
+
+export function homeRouteFor(role: string | null | undefined): string {
+  if (role === 'platform_admin')    return ROUTES.platformDashboard;
+  if (role === 'institution_admin') return ROUTES.institutionDashboard;
+  return ROUTES.dashboard;
+}

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Lock, Loader2, AlertCircle, KeyRound, LogOut, ShieldAlert } from 'lucide-react';
+import { Loader2, AlertCircle, KeyRound, LogOut, ShieldAlert } from 'lucide-react';
 import {
   Form, FormControl, FormField, FormItem, FormLabel,
   FormMessage, FormDescription,
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/layout/logo';
 import { api } from '@/lib/api';
 import { getToken, getAuthUser, saveAuth, clearAuth } from '@/lib/auth';
-import { ROUTES } from '@/lib/routes';
+import { ROUTES, homeRouteFor } from '@/lib/routes';
 
 const schema = z.object({
   current_password: z.string().min(1, 'Current password is required'),
@@ -30,6 +30,7 @@ const schema = z.object({
 );
 
 type FormValues = z.infer<typeof schema>;
+
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -92,11 +93,7 @@ export default function ChangePasswordPage() {
         });
       }
 
-      if (updatedUser?.role === 'institution_admin') {
-        router.push(ROUTES.institutionDashboard);
-      } else {
-        router.push(ROUTES.dashboard);
-      }
+      router.push(homeRouteFor(updatedUser?.role ?? current?.role));
 
     } catch (err: any) {
       setServerError(err.message || 'Could not change password. Please try again.');
@@ -120,7 +117,7 @@ export default function ChangePasswordPage() {
           <button
             type="button"
             onClick={handleSignOut}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-ink-50 hover:text-ink hover:bg-ink-5 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold text-danger hover:bg-danger-soft transition-colors"
           >
             <LogOut className="size-4" />
             Sign out
@@ -132,7 +129,7 @@ export default function ChangePasswordPage() {
       <main className="flex-1 flex flex-col items-center px-4 py-10">
         <div className="w-full max-w-[460px]">
 
-          {/* Mandatory security banner — eye-catching */}
+          {/* Mandatory security banner */}
           {forced && (
             <div className="mb-5 rounded-xl bg-warning text-white p-4 flex items-start gap-3 shadow-soft">
               <ShieldAlert className="size-5 shrink-0 mt-0.5" />

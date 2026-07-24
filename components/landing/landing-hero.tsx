@@ -1,8 +1,12 @@
-import Link from 'next/link';
-import { ArrowRight, GraduationCap, MapPin, Users } from 'lucide-react';
-import { HeroSlideshow } from '@/components/shared/hero-slideshow';
-import { ROUTES } from '@/lib/routes';
+'use client';
 
+import * as React from 'react';
+import Link from 'next/link';
+import { ArrowRight, GraduationCap } from 'lucide-react';
+import { HeroSlideshow } from '@/components/shared/hero-slideshow';
+import { ROUTES, homeRouteFor } from '@/lib/routes';
+import { getAuthUser, type AuthUser } from '@/lib/auth';
+import { useStats } from '@/hooks/use-stats';
 
 const HERO_SLIDES = [
   '/images/hero/slide-1.jpg',
@@ -13,6 +17,11 @@ const HERO_SLIDES = [
 ];
 
 export function LandingHero() {
+  const [user, setUser] = React.useState<AuthUser | null>(null);
+  React.useEffect(() => { setUser(getAuthUser()); }, []);
+
+  const stats = useStats();
+
   return (
     <section className="relative min-h-[100svh] w-full overflow-hidden bg-brand-900 text-white">
       {/* ── Background slideshow ── */}
@@ -63,13 +72,15 @@ export function LandingHero() {
             </p>
 
             <div className="mt-9 flex flex-wrap gap-3">
-              <Link
-                href={ROUTES.register}
-                className="inline-flex items-center gap-2 rounded-full bg-white text-brand-700 px-7 py-4 text-base font-bold hover:bg-brand-50 transition-all shadow-elevate hover:scale-[1.02]"
-              >
-                Create free account
-                <ArrowRight className="size-4" />
-              </Link>
+              {!user && (
+                <Link
+                  href={ROUTES.register}
+                  className="inline-flex items-center gap-2 rounded-full bg-white text-brand-700 px-7 py-4 text-base font-bold hover:bg-brand-50 transition-all shadow-elevate hover:scale-[1.02]"
+                >
+                  Create free account
+                  <ArrowRight className="size-4" />
+                </Link>
+              )}
               <Link
                 href={ROUTES.institutions}
                 className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-md border border-white/30 text-white px-7 py-4 text-base font-semibold hover:bg-white/20 transition-all"
@@ -78,74 +89,20 @@ export function LandingHero() {
               </Link>
             </div>
 
-            {/* Inline trust indicators */}
+            {/* Inline trust indicator */}
             <div className="mt-10 flex flex-wrap items-center gap-x-7 gap-y-3">
-              <div className="flex items-center gap-3">
-                <div className="flex">
-                  {['E', 'C', 'M', 'N', 'T'].map((l, i) => (
-                    <span
-                      key={l}
-                      className="grid place-items-center size-8 rounded-full bg-brand-600 text-white text-xs font-bold border-2 border-ink"
-                      style={{ marginLeft: i === 0 ? 0 : -10 }}
-                    >
-                      {l}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-sm text-white/85">
-                  <strong className="text-white">2,400+ students</strong>
-                  <span className="text-white/60"> applied this cycle</span>
-                </p>
-              </div>
-
-              <div className="hidden sm:block h-5 w-px bg-white/20" />
-
               <div className="flex items-center gap-2 text-sm text-white/85">
                 <GraduationCap className="size-4 text-brand-300" />
-                <strong className="text-white">12+ institutions</strong>
+                <strong className="text-white">
+                  {stats ? stats.institutions_open : '—'}{' '}
+                  {stats?.institutions_open === 1 ? 'institution' : 'institutions'}
+                </strong>
                 <span className="text-white/60">currently admitting</span>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Bottom feature strip — sits at the bottom of the hero */}
-        <div className="pb-10 hidden lg:block">
-          <div className="grid grid-cols-3 gap-4 max-w-4xl">
-            <FeatureChip
-              icon={<Users className="size-5" />}
-              title="2,400+"
-              subtitle="Students applied this cycle"
-            />
-            <FeatureChip
-              icon={<GraduationCap className="size-5" />}
-              title="500+"
-              subtitle="Programmes across Zambia"
-            />
-            <FeatureChip
-              icon={<MapPin className="size-5" />}
-              title="10/10"
-              subtitle="Provinces represented"
-            />
-          </div>
-        </div>
       </div>
     </section>
-  );
-}
-
-function FeatureChip({
-  icon, title, subtitle,
-}: { icon: React.ReactNode; title: string; subtitle: string }) {
-  return (
-    <div className="flex items-center gap-4 rounded-xl bg-white/8 backdrop-blur-md border border-white/15 px-5 py-4">
-      <div className="grid place-items-center size-10 rounded-lg bg-brand-600/80 text-white shrink-0">
-        {icon}
-      </div>
-      <div>
-        <p className="font-display text-2xl text-white leading-none">{title}</p>
-        <p className="text-xs text-white/65 mt-1">{subtitle}</p>
-      </div>
-    </div>
   );
 }

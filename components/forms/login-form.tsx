@@ -40,12 +40,16 @@ export function LoginForm() {
       // Persist token and user to localStorage
       saveAuth(response.token, response.user);
 
+      const user = response.user;
+
       // Forced password change comes before everything else
-      if (response.user.must_change_password) {
+      if (user.must_change_password) {
         router.push(ROUTES.changePassword);
-      } else if (response.user.role === 'institution_admin') {
+      } else if (user.role === 'platform_admin') {
+        router.push(ROUTES.platformDashboard);
+      } else if (user.role === 'institution_admin') {
         router.push(ROUTES.institutionDashboard);
-      } else if (!response.user.profile_complete) {
+      } else if (!user.profile_complete) {
         router.push(ROUTES.welcome);
       } else {
         router.push(ROUTES.dashboard);
